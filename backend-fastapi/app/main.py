@@ -5,17 +5,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.db.mongodb import close_mongo_connection, connect_to_mongo
+from app.db.mongodb import connect_to_mongo
 from app.routers import questions
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    await connect_to_mongo()
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
+    client, database = await connect_to_mongo(settings.mongodb_uri, settings.mongodb_database)
+    app.state.db = database
     try:
         yield
     finally:
-        await close_mongo_connection()
+        client.close()
 
 
 def create_app() -> FastAPI:
@@ -29,9 +31,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.frontend_origin],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
     )
 
     app.include_router(questions.router)

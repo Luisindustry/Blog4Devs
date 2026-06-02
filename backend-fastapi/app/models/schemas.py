@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Annotated, Any
 
 from bson import ObjectId
-from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 
 def utc_now() -> datetime:
@@ -78,22 +78,31 @@ class QuestionPublic(BaseModel):
     author: EmbeddedAuthor
     tags: list[str]
     status: QuestionStatus
+    votes: int = 0
     answers: list[AnswerInDB] = Field(default_factory=list)
     created_at: datetime
 
     model_config = ConfigDict(populate_by_name=True, use_enum_values=True)
 
 
-class UserCreate(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
-    email: EmailStr
-    role: UserRole = UserRole.JUNIOR
-    github_id: str | None = Field(default=None, max_length=100)
-
-    model_config = ConfigDict(use_enum_values=True)
-
-
-class UserPublic(UserCreate):
+class QuestionSummary(BaseModel):
     id: ObjectIdStr = Field(alias="_id")
+    title: str
+    slug: str
+    author: EmbeddedAuthor
+    tags: list[str]
+    status: QuestionStatus
+    votes: int = 0
+    answers_count: int = 0
+    created_at: datetime
 
     model_config = ConfigDict(populate_by_name=True, use_enum_values=True)
+
+
+class QuestionListResponse(BaseModel):
+    items: list[QuestionSummary]
+    total: int
+    skip: int
+    limit: int
+
+

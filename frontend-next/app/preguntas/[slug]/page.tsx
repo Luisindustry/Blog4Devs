@@ -1,39 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import type { Question } from "@/types/api";
+
 type PageProps = {
   params: Promise<{
     slug: string;
   }>;
-};
-
-type UserRole = "junior" | "senior" | "admin";
-type QuestionStatus = "pending" | "approved" | "rejected";
-
-type Author = {
-  user_id: string;
-  username: string;
-  role: UserRole;
-};
-
-type Answer = {
-  answer_id: string;
-  content: string;
-  author: Author;
-  is_accepted: boolean;
-  created_at: string;
-};
-
-type Question = {
-  id: string;
-  title: string;
-  slug: string;
-  content: string;
-  author: Author;
-  tags: string[];
-  status: QuestionStatus;
-  answers: Answer[];
-  created_at: string;
 };
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
@@ -56,10 +29,10 @@ async function fetchQuestion(slug: string): Promise<Question | null> {
   }
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch question ${slug}: ${response.status}`);
+    throw new Error(`Backend error ${response.status} for question "${slug}"`);
   }
 
-  return response.json();
+  return response.json() as Promise<Question>;
 }
 
 function toExcerpt(value: string, maxLength = 155): string {
@@ -75,15 +48,18 @@ function formatDate(value: string): string {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const question = await fetchQuestion(slug);
+
+  let question: Question | null = null;
+  try {
+    question = await fetchQuestion(slug);
+  } catch {
+    return { title: "Error al cargar la pregunta", robots: { index: false, follow: false } };
+  }
 
   if (!question) {
     return {
       title: "Pregunta no encontrada",
-      robots: {
-        index: false,
-        follow: false,
-      },
+      robots: { index: false, follow: false },
     };
   }
 
@@ -95,19 +71,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: question.title,
     description,
     keywords: question.tags,
-    alternates: {
-      canonical: url,
-    },
+    alternates: { canonical: url },
     openGraph: {
       title: question.title,
       description,
       type: "article",
       url,
     },
-    robots: {
-      index: shouldIndex,
-      follow: shouldIndex,
-    },
+    robots: { index: shouldIndex, follow: shouldIndex },
   };
 }
 
