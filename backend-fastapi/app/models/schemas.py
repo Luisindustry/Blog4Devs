@@ -99,6 +99,22 @@ class QuestionSummary(BaseModel):
     model_config = ConfigDict(populate_by_name=True, use_enum_values=True)
 
 
+class QuestionUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=10, max_length=180)
+    content: str | None = Field(default=None, min_length=30, max_length=50_000)
+    tags: list[str] | None = Field(default=None, min_length=1, max_length=8)
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, tags: list[str] | None) -> list[str] | None:
+        if tags is None:
+            return None
+        normalized = sorted({tag.strip().lower() for tag in tags if tag.strip()})
+        if not normalized:
+            raise ValueError("At least one tag is required")
+        return normalized
+
+
 class QuestionListResponse(BaseModel):
     items: list[QuestionSummary]
     total: int

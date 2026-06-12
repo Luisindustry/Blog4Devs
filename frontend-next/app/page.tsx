@@ -1,6 +1,5 @@
-import { QuestionCard } from "@/components/question-card";
+import { QuestionFeed } from "@/components/question-feed";
 import type { QuestionListResponse, QuestionSummary } from "@/types/api";
-import { formatRelativeTime } from "@/lib/date";
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
 
@@ -34,8 +33,8 @@ export default async function HomePage() {
           Respuestas de desarrolladores senior.
         </h1>
         <p className="mt-3 max-w-md text-sm text-muted-foreground">
-          Una plataforma donde juniors preguntan sin miedo y seniors comparten experiencia real —
-          sin Stack Overflow genérico.
+          Una plataforma donde juniors preguntan sin miedo y seniors comparten
+          experiencia real — sin Stack Overflow genérico.
         </p>
       </section>
 
@@ -44,28 +43,7 @@ export default async function HomePage() {
         <h2 className="mb-4 font-mono text-[11px] uppercase tracking-widest text-muted-foreground/60">
           Preguntas Recientes
         </h2>
-
-        {questions.length === 0 ? (
-          <p className="py-12 text-center font-mono text-sm text-muted-foreground">
-            No hay preguntas todavía. ¡Sé el primero en preguntar.
-          </p>
-        ) : (
-          <div>
-            {questions.map((q) => (
-              <QuestionCard
-                key={q.id}
-                id={q.id}
-                slug={q.slug}
-                title={q.title}
-                tags={q.tags}
-                author={q.author.username}
-                votes={q.votes}
-                answersCount={q.answers_count}
-                createdAt={formatRelativeTime(q.created_at)}
-              />
-            ))}
-          </div>
-        )}
+        <QuestionFeed initialQuestions={questions} />
       </section>
     </main>
   );

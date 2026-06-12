@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fira_Code, Inter } from "next/font/google";
 import { Navbar } from "@/components/navbar";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const inter = Inter({
@@ -30,6 +31,7 @@ export default function RootLayout({
       <body className="min-h-screen antialiased">
         <Navbar />
         {children}
+        <Toaster position="bottom-right" theme="dark" />
       </body>
     </html>
   );

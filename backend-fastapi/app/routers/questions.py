@@ -17,6 +17,7 @@ from app.models.schemas import (
     QuestionPublic,
     QuestionStatus,
     QuestionSummary,
+    QuestionUpdate,
 )
 from app.services.webhooks import publish_question_created
 
@@ -149,6 +150,49 @@ async def get_question_by_slug(
         )
 
     return serialize_question(document)
+
+
+@router.patch("/{slug}", response_model=QuestionPublic, response_model_by_alias=False)
+async def update_question(
+    slug: str,
+    payload: QuestionUpdate,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+) -> QuestionPublic:
+    update_fields = payload.model_dump(exclude_none=True)
+
+    if not update_fields:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one field must be provided",
+        )
+
+    updated = await database.questions.find_one_and_update(
+        {"slug": slug},
+        {"$set": update_fields},
+        return_document=True,
+    )
+
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found",
+        )
+
+    return serialize_question(updated)
+
+
+@router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_question(
+    slug: str,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+) -> None:
+    result = await database.questions.delete_one({"slug": slug})
+
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found",
+        )
 
 
 @router.post(

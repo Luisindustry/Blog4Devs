@@ -117,3 +117,90 @@ async def test_add_answer_short_content_returns_422(client: AsyncClient):
         json={"content": "Muy corto", "author": AUTHOR_PAYLOAD},
     )
     assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# PATCH /questions/{slug}
+# ---------------------------------------------------------------------------
+
+async def test_update_question_title(client: AsyncClient):
+    created = (await client.post("/questions/", json=question_payload())).json()
+    new_title = "Como funciona el GIL de Python en programas multihilo"
+
+    response = await client.patch(
+        f"/questions/{created['slug']}",
+        json={"title": new_title},
+    )
+    assert response.status_code == 200
+    assert response.json()["title"] == new_title
+
+
+async def test_update_question_tags(client: AsyncClient):
+    created = (await client.post("/questions/", json=question_payload())).json()
+
+    response = await client.patch(
+        f"/questions/{created['slug']}",
+        json={"tags": ["python", "gil", "threads"]},
+    )
+    assert response.status_code == 200
+    assert response.json()["tags"] == ["gil", "python", "threads"]
+
+
+async def test_update_question_content(client: AsyncClient):
+    created = (await client.post("/questions/", json=question_payload())).json()
+    new_content = "Nuevo contenido actualizado que tiene mas de treinta caracteres para validacion."
+
+    response = await client.patch(
+        f"/questions/{created['slug']}",
+        json={"content": new_content},
+    )
+    assert response.status_code == 200
+    assert response.json()["content"] == new_content
+
+
+async def test_update_question_not_found(client: AsyncClient):
+    response = await client.patch(
+        "/questions/slug-que-no-existe",
+        json={"title": "Titulo nuevo valido para el test de not found"},
+    )
+    assert response.status_code == 404
+
+
+async def test_update_question_empty_body_returns_422(client: AsyncClient):
+    created = (await client.post("/questions/", json=question_payload())).json()
+    response = await client.patch(f"/questions/{created['slug']}", json={})
+    assert response.status_code == 422
+
+
+async def test_update_question_short_title_returns_422(client: AsyncClient):
+    created = (await client.post("/questions/", json=question_payload())).json()
+    response = await client.patch(
+        f"/questions/{created['slug']}",
+        json={"title": "Corto"},
+    )
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# DELETE /questions/{slug}
+# ---------------------------------------------------------------------------
+
+async def test_delete_question_returns_204(client: AsyncClient):
+    created = (await client.post("/questions/", json=question_payload())).json()
+
+    response = await client.delete(f"/questions/{created['slug']}")
+    assert response.status_code == 204
+
+
+async def test_delete_question_removes_from_db(client: AsyncClient):
+    created = (await client.post("/questions/", json=question_payload())).json()
+
+    await client.delete(f"/questions/{created['slug']}")
+
+    get_response = await client.get(f"/questions/{created['slug']}")
+    assert get_response.status_code == 404
+
+
+async def test_delete_question_not_found(client: AsyncClient):
+    response = await client.delete("/questions/slug-que-no-existe")
+    assert response.status_code == 404
