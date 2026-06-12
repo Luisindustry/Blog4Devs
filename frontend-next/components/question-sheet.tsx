@@ -29,7 +29,6 @@ export function QuestionSheet({
   const [title, setTitle] = useState("");
   const [tags, setTags] = useState("");
   const [body, setBody] = useState("");
-  const [username, setUsername] = useState("");
 
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -50,12 +49,6 @@ export function QuestionSheet({
     if (isEdit) setBody(content);
   }, [content, isEdit]);
 
-  // Persist username in localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("b4d_username") ?? "";
-    setUsername(saved);
-  }, []);
-
   // Focus title when sheet opens
   useEffect(() => {
     if (open) {
@@ -72,15 +65,10 @@ export function QuestionSheet({
 
     if (!title.trim() || !body.trim() || parsedTags.length === 0) return;
 
-    if (username.trim()) {
-      localStorage.setItem("b4d_username", username.trim());
-    }
-
     onSubmit({
       title: title.trim(),
       content: body.trim(),
       tags: parsedTags,
-      username: username.trim() || "anon",
     });
   }
 
@@ -150,13 +138,7 @@ export function QuestionSheet({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-border pt-4">
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="tu username"
-              className="w-28 border-0 border-b border-border bg-transparent font-mono text-[11px] text-muted-foreground placeholder:text-muted-foreground/30 focus:border-ring focus:outline-none"
-            />
+          <div className="flex items-center justify-end border-t border-border pt-4">
             <div className="flex items-center gap-3">
               <span className="font-mono text-[10px] text-muted-foreground/40">⌘ Enter</span>
               <button

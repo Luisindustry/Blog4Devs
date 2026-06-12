@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { QuestionCard } from "@/components/question-card";
@@ -18,7 +19,10 @@ type OptimisticAction =
   | { type: "update"; item: QuestionSummary }
   | { type: "delete"; id: string };
 
-function makeOptimisticItem(data: QuestionFormData): QuestionSummary {
+function makeOptimisticItem(
+  data: QuestionFormData,
+  username: string,
+): QuestionSummary {
   return {
     id: `optimistic-${Date.now()}`,
     slug: data.title
@@ -27,7 +31,7 @@ function makeOptimisticItem(data: QuestionFormData): QuestionSummary {
       .slice(0, 60),
     title: data.title,
     tags: data.tags,
-    author: { user_id: "temp", username: data.username, role: "junior" },
+    author: { user_id: "temp", username, role: "junior" },
     status: "pending",
     votes: 0,
     answers_count: 0,
@@ -37,9 +41,14 @@ function makeOptimisticItem(data: QuestionFormData): QuestionSummary {
 
 export function QuestionFeed({
   initialQuestions,
+  currentUsername,
+  isAdmin = false,
 }: {
   initialQuestions: QuestionSummary[];
+  currentUsername: string | null;
+  isAdmin?: boolean;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -64,6 +73,22 @@ export function QuestionFeed({
     },
   );
 
+  function canModify(question: QuestionSummary): boolean {
+    if (isAdmin) return true;
+    return currentUsername !== null && question.author.username === currentUsername;
+  }
+
+  function openCreateSheet() {
+    if (!currentUsername) {
+      toast.error("Inicia sesión para crear una pregunta");
+      router.push("/login");
+      return;
+    }
+    setEditTarget(null);
+    setEditContent("");
+    setSheetOpen(true);
+  }
+
   // Global shortcut: C → open create sheet
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -71,6 +96,11 @@ export function QuestionFeed({
       if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "c" || e.key === "C") {
+        if (!currentUsername) {
+          toast.error("Inicia sesión para crear una pregunta");
+          router.push("/login");
+          return;
+        }
         setEditTarget(null);
         setEditContent("");
         setSheetOpen(true);
@@ -78,7 +108,7 @@ export function QuestionFeed({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [currentUsername, router]);
 
   async function handleEdit(question: QuestionSummary) {
     setEditTarget(question);
@@ -97,7 +127,7 @@ export function QuestionFeed({
   }
 
   function handleCreate(data: QuestionFormData) {
-    const tempItem = makeOptimisticItem(data);
+    const tempItem = makeOptimisticItem(data, currentUsername ?? "yo");
     setSheetOpen(false);
 
     startTransition(async () => {
@@ -153,16 +183,30 @@ export function QuestionFeed({
     <>
       {/* Keyboard hint */}
       <p className="mb-5 font-mono text-[10px] text-muted-foreground/40">
-        Presiona{" "}
-        <kbd className="rounded border border-border px-1 font-mono">c</kbd> para
-        crear una pregunta
+        {currentUsername ? (
+          <>
+            Presiona{" "}
+            <kbd className="rounded border border-border px-1 font-mono">c</kbd>{" "}
+            para crear una pregunta
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => router.push("/login")}
+              className="underline underline-offset-4 hover:text-foreground"
+            >
+              Inicia sesión
+            </button>{" "}
+            para crear preguntas y responder
+          </>
+        )}
       </p>
 
       {optimisticItems.length === 0 ? (
         <p className="py-12 text-center font-mono text-sm text-muted-foreground">
           No hay preguntas todavía.{" "}
           <button
-            onClick={() => setSheetOpen(true)}
+            onClick={openCreateSheet}
             className="underline underline-offset-4 hover:text-foreground"
           >
             ¡Sé el primero en preguntar!
@@ -182,8 +226,8 @@ export function QuestionFeed({
               answersCount={q.answers_count}
               createdAt={formatRelativeTime(q.created_at)}
               isPendingDelete={pendingDeleteId === q.id}
-              onEdit={() => handleEdit(q)}
-              onDelete={() => handleDelete(q)}
+              onEdit={canModify(q) ? () => handleEdit(q) : undefined}
+              onDelete={canModify(q) ? () => handleDelete(q) : undefined}
             />
           ))}
         </div>

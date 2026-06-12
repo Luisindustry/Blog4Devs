@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fira_Code, Inter } from "next/font/google";
 import { Navbar } from "@/components/navbar";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -27,11 +28,17 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es" className={`${inter.variable} ${firaMono.variable} dark`}>
+    <html
+      lang="es"
+      className={`${inter.variable} ${firaMono.variable}`}
+      suppressHydrationWarning
+    >
       <body className="min-h-screen antialiased">
-        <Navbar />
-        {children}
-        <Toaster position="bottom-right" theme="dark" />
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          <Navbar />
+          {children}
+          <Toaster position="bottom-right" />
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -96,13 +96,14 @@ export function QuestionCard({
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {tags.map((tag) => (
-            <Badge
-              key={tag}
-              variant="outline"
-              className="h-5 rounded-sm border-border px-1.5 font-mono text-[10px] text-muted-foreground"
-            >
-              [{tag}]
-            </Badge>
+            <Link key={tag} href={`/?tag=${encodeURIComponent(tag)}`}>
+              <Badge
+                variant="outline"
+                className="h-5 cursor-pointer rounded-sm border-border px-1.5 font-mono text-[10px] text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
+              >
+                [{tag}]
+              </Badge>
+            </Link>
           ))}
           <span className="font-mono text-[11px] text-muted-foreground/60">
             {author}

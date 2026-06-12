@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import Link from "next/link";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { createAnswer } from "@/app/actions";
 import { formatDate } from "@/lib/date";
@@ -9,6 +10,7 @@ import type { Answer } from "@/types/api";
 type AnswerSectionProps = {
   slug: string;
   initialAnswers: Answer[];
+  currentUsername: string | null;
 };
 
 function AnswerItem({ answer }: { answer: Answer & { isOptimistic?: boolean } }) {
@@ -44,10 +46,13 @@ function AnswerItem({ answer }: { answer: Answer & { isOptimistic?: boolean } })
   );
 }
 
-export function AnswerSection({ slug, initialAnswers }: AnswerSectionProps) {
+export function AnswerSection({
+  slug,
+  initialAnswers,
+  currentUsername,
+}: AnswerSectionProps) {
   const [isPending, startTransition] = useTransition();
   const [content, setContent] = useState("");
-  const [username, setUsername] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [optimisticAnswers, dispatch] = useOptimistic(
@@ -58,11 +63,6 @@ export function AnswerSection({ slug, initialAnswers }: AnswerSectionProps) {
     ],
   );
 
-  useEffect(() => {
-    const saved = localStorage.getItem("b4d_username") ?? "";
-    setUsername(saved);
-  }, []);
-
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
@@ -71,6 +71,8 @@ export function AnswerSection({ slug, initialAnswers }: AnswerSectionProps) {
   }
 
   function handleSubmit() {
+    if (!currentUsername) return;
+
     const trimmed = content.trim();
     if (trimmed.length < 20) {
       toast.error("La respuesta debe tener al menos 20 caracteres");
@@ -78,13 +80,10 @@ export function AnswerSection({ slug, initialAnswers }: AnswerSectionProps) {
       return;
     }
 
-    const user = username.trim() || "anon";
-    if (username.trim()) localStorage.setItem("b4d_username", username.trim());
-
     const tempAnswer: Answer & { isOptimistic: boolean } = {
       answer_id: `temp-${Date.now()}`,
       content: trimmed,
-      author: { user_id: "temp", username: user, role: "junior" },
+      author: { user_id: "temp", username: currentUsername, role: "junior" },
       is_accepted: false,
       created_at: new Date().toISOString(),
       isOptimistic: true,
@@ -95,7 +94,7 @@ export function AnswerSection({ slug, initialAnswers }: AnswerSectionProps) {
     startTransition(async () => {
       dispatch(tempAnswer);
       try {
-        await createAnswer(slug, trimmed, user);
+        await createAnswer(slug, trimmed);
         toast.success("Respuesta publicada");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al publicar");
@@ -117,39 +116,45 @@ export function AnswerSection({ slug, initialAnswers }: AnswerSectionProps) {
 
       {/* Formulario de respuesta */}
       <div className="mt-10 border-t border-border pt-8">
-        <p className="font-mono text-xs text-muted-foreground mb-4">
-          // nueva respuesta
-        </p>
+        {currentUsername ? (
+          <>
+            <p className="font-mono text-xs text-muted-foreground mb-4">
+              // nueva respuesta como @{currentUsername}
+            </p>
 
-        <textarea
-          ref={textareaRef}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={"Escribe tu respuesta aquí.\nSoporta Markdown. Mínimo 20 caracteres."}
-          rows={7}
-          className="w-full resize-none rounded border border-border bg-transparent p-3 font-mono text-sm text-foreground placeholder:text-muted-foreground/30 focus:border-ring focus:outline-none"
-        />
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={"Escribe tu respuesta aquí.\nSoporta Markdown. Mínimo 20 caracteres."}
+              rows={7}
+              className="w-full resize-none rounded border border-border bg-transparent p-3 font-mono text-sm text-foreground placeholder:text-muted-foreground/30 focus:border-ring focus:outline-none"
+            />
 
-        <div className="mt-3 flex items-center justify-between">
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="tu username"
-            className="w-28 border-0 border-b border-border bg-transparent font-mono text-xs text-muted-foreground placeholder:text-muted-foreground/30 focus:border-ring focus:outline-none"
-          />
-
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-[10px] text-muted-foreground/40">⌘ Enter</span>
-            <button
-              onClick={handleSubmit}
-              disabled={isPending}
-              className="border border-border px-3 py-1.5 font-mono text-xs text-foreground transition-colors hover:bg-muted/40 disabled:opacity-40"
+            <div className="mt-3 flex items-center justify-end gap-3">
+              <span className="font-mono text-[10px] text-muted-foreground/40">⌘ Enter</span>
+              <button
+                onClick={handleSubmit}
+                disabled={isPending}
+                className="border border-border px-3 py-1.5 font-mono text-xs text-foreground transition-colors hover:bg-muted/40 disabled:opacity-40"
+              >
+                {isPending ? "[respondiendo...]" : "[responder]"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="font-mono text-xs text-muted-foreground">
+            //{" "}
+            <Link
+              href="/login"
+              className="underline underline-offset-4 hover:text-foreground"
             >
-              {isPending ? "[respondiendo...]" : "[responder]"}
-            </button>
-          </div>
-        </div>
+              inicia sesión
+            </Link>{" "}
+            para responder
+          </p>
+        )}
       </div>
     </section>
   );

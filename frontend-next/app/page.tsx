@@ -1,11 +1,20 @@
+import Link from "next/link";
 import { QuestionFeed } from "@/components/question-feed";
+import { getSession } from "@/lib/session";
 import type { QuestionListResponse, QuestionSummary } from "@/types/api";
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
 
-async function fetchRecentQuestions(): Promise<QuestionSummary[]> {
+type PageProps = {
+  searchParams: Promise<{ tag?: string }>;
+};
+
+async function fetchRecentQuestions(tag?: string): Promise<QuestionSummary[]> {
   try {
-    const res = await fetch(`${apiBaseUrl}/questions/?limit=20`, {
+    const params = new URLSearchParams({ limit: "20" });
+    if (tag) params.set("tag", tag);
+
+    const res = await fetch(`${apiBaseUrl}/questions/?${params.toString()}`, {
       cache: "no-store",
       headers: { Accept: "application/json" },
     });
@@ -17,8 +26,12 @@ async function fetchRecentQuestions(): Promise<QuestionSummary[]> {
   }
 }
 
-export default async function HomePage() {
-  const questions = await fetchRecentQuestions();
+export default async function HomePage({ searchParams }: PageProps) {
+  const { tag } = await searchParams;
+  const [questions, session] = await Promise.all([
+    fetchRecentQuestions(tag),
+    getSession(),
+  ]);
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-20 pt-28">
@@ -40,10 +53,24 @@ export default async function HomePage() {
 
       {/* Feed */}
       <section className="mt-8">
-        <h2 className="mb-4 font-mono text-[11px] uppercase tracking-widest text-muted-foreground/60">
-          Preguntas Recientes
-        </h2>
-        <QuestionFeed initialQuestions={questions} />
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/60">
+            {tag ? `Preguntas con [${tag}]` : "Preguntas Recientes"}
+          </h2>
+          {tag && (
+            <Link
+              href="/"
+              className="font-mono text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              [quitar filtro ×]
+            </Link>
+          )}
+        </div>
+        <QuestionFeed
+          initialQuestions={questions}
+          currentUsername={session?.username ?? null}
+          isAdmin={session?.role === "admin"}
+        />
       </section>
     </main>
   );

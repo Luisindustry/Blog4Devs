@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AnswerSection } from "@/components/answer-section";
 import { formatDate } from "@/lib/date";
+import { getSession } from "@/lib/session";
 import type { Question } from "@/types/api";
 
 type PageProps = {
@@ -64,9 +66,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function QuestionPage({ params }: PageProps) {
   const { slug } = await params;
-  const question = await fetchQuestion(slug);
+  const [question, session] = await Promise.all([fetchQuestion(slug), getSession()]);
 
   if (!question) notFound();
+
+  const canMessageAuthor =
+    session !== null && session.username !== question.author.username;
 
   return (
     <main className="page-shell">
@@ -78,11 +83,24 @@ export default async function QuestionPage({ params }: PageProps) {
           <p className="meta">
             Por <strong>{question.author.username}</strong> el{" "}
             <time dateTime={question.created_at}>{formatDate(question.created_at)}</time>
+            {canMessageAuthor && (
+              <>
+                {" · "}
+                <Link
+                  href={`/mensajes?con=${encodeURIComponent(question.author.username)}`}
+                  className="underline underline-offset-4 hover:text-foreground"
+                >
+                  [mensaje privado]
+                </Link>
+              </>
+            )}
           </p>
           <ul className="tag-list" aria-label="Tags">
             {question.tags.map((tag) => (
-              <li className="tag" key={tag}>
-                {tag}
+              <li key={tag}>
+                <Link className="tag" href={`/?tag=${encodeURIComponent(tag)}`}>
+                  {tag}
+                </Link>
               </li>
             ))}
           </ul>
@@ -93,7 +111,11 @@ export default async function QuestionPage({ params }: PageProps) {
         </section>
       </article>
 
-      <AnswerSection slug={question.slug} initialAnswers={question.answers} />
+      <AnswerSection
+        slug={question.slug}
+        initialAnswers={question.answers}
+        currentUsername={session?.username ?? null}
+      />
     </main>
   );
 }
