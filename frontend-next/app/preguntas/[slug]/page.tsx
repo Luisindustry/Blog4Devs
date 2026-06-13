@@ -14,12 +14,10 @@ type PageProps = {
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
-export const revalidate = 60;
-
 async function fetchQuestion(slug: string): Promise<Question | null> {
   const response = await fetch(`${apiBaseUrl}/questions/${encodeURIComponent(slug)}`, {
     headers: { Accept: "application/json" },
-    next: { revalidate },
+    cache: "no-store",
   });
 
   if (response.status === 404) return null;

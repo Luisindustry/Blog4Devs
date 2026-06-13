@@ -65,7 +65,7 @@ test.describe("Página de inicio", () => {
     await page.goto("/");
 
     const card = page.getByTestId("question-card").filter({ hasText: q.title });
-    await card.getByRole("link").click();
+    await card.getByRole("link", { name: q.title }).click();
 
     await expect(page).toHaveURL(`/preguntas/${q.slug}`);
   });
