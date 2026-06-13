@@ -83,7 +83,7 @@ export function QuestionSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="flex w-[520px] max-w-full flex-col border-l border-border bg-background p-6"
+        className="flex w-[520px] max-w-full flex-col border-l border-border bg-background p-6 duration-400 [transition-timing-function:var(--ease-out-expo)]"
         onKeyDown={handleKeyDown}
       >
         <SheetHeader className="mb-5">

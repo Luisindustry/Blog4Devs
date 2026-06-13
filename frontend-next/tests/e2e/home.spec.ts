@@ -14,10 +14,10 @@ test.describe("Página de inicio", () => {
     await expect(page.getByText("sin Stack Overflow genérico")).toBeVisible();
   });
 
-  test("muestra la navbar con logo y botón Sign In", async ({ page }) => {
+  test("muestra la navbar con logo y enlace Sign In", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("link", { name: "blog4devs" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Sign In" })).toBeVisible();
   });
 
   test("el logo de la navbar es un link a la raíz", async ({ page }) => {

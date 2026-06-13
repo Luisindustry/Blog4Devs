@@ -214,9 +214,10 @@ export function QuestionFeed({
         </p>
       ) : (
         <div>
-          {optimisticItems.map((q) => (
+          {optimisticItems.map((q, index) => (
             <QuestionCard
               key={q.id}
+              index={index}
               id={q.id}
               slug={q.slug}
               title={q.title}

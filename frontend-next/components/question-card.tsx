@@ -14,6 +14,7 @@ export type QuestionCardProps = {
   votes: number;
   answersCount: number;
   createdAt: string;
+  index?: number;
   isPendingDelete?: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -54,6 +55,7 @@ export function QuestionCard({
   votes,
   answersCount,
   createdAt,
+  index = 0,
   isPendingDelete,
   onEdit,
   onDelete,
@@ -61,7 +63,8 @@ export function QuestionCard({
   return (
     <div
       data-testid="question-card"
-      className="group flex items-start gap-1 border-b border-border px-1 py-4 transition-colors hover:bg-muted/20"
+      style={{ "--stagger": index } as React.CSSProperties}
+      className="feed-item group flex items-start gap-1 border-b border-border px-1 py-4 transition-colors duration-300 hover:bg-muted/20"
     >
       <UpvoteButton initialCount={votes} />
 

@@ -13,11 +13,19 @@ type AnswerSectionProps = {
   currentUsername: string | null;
 };
 
-function AnswerItem({ answer }: { answer: Answer & { isOptimistic?: boolean } }) {
+function AnswerItem({
+  answer,
+  index = 0,
+}: {
+  answer: Answer & { isOptimistic?: boolean };
+  index?: number;
+}) {
   return (
     <article
+      style={{ "--stagger": index } as React.CSSProperties}
       className={[
         "answer",
+        "feed-item",
         answer.is_accepted ? "accepted" : "",
         answer.isOptimistic ? "opacity-60" : "",
       ]
@@ -109,8 +117,8 @@ export function AnswerSection({
       {optimisticAnswers.length === 0 ? (
         <p className="meta">Aún no hay respuestas publicadas.</p>
       ) : (
-        optimisticAnswers.map((answer) => (
-          <AnswerItem key={answer.answer_id} answer={answer} />
+        optimisticAnswers.map((answer, index) => (
+          <AnswerItem key={answer.answer_id} answer={answer} index={index} />
         ))
       )}
 
@@ -119,7 +127,7 @@ export function AnswerSection({
         {currentUsername ? (
           <>
             <p className="font-mono text-xs text-muted-foreground mb-4">
-              // nueva respuesta como @{currentUsername}
+              {"// "}nueva respuesta como @{currentUsername}
             </p>
 
             <textarea
@@ -145,7 +153,7 @@ export function AnswerSection({
           </>
         ) : (
           <p className="font-mono text-xs text-muted-foreground">
-            //{" "}
+            {"// "}
             <Link
               href="/login"
               className="underline underline-offset-4 hover:text-foreground"

@@ -33,7 +33,7 @@ test.describe("Página de detalle de pregunta", () => {
 
     await page.goto(`/preguntas/${q.slug}`);
 
-    await expect(page.getByText("Aun no hay respuestas publicadas.")).toBeVisible();
+    await expect(page.getByText("no hay respuestas publicadas")).toBeVisible();
   });
 
   test("muestra la fecha de creación de la pregunta", async ({ page }) => {

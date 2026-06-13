@@ -226,7 +226,7 @@ export function ChatPanel({
                       className={`flex ${isMine ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[75%] rounded border px-3 py-2 ${
+                        className={`message-in max-w-[75%] rounded border px-3 py-2 ${
                           isMine
                             ? "border-ring/40 bg-muted/40"
                             : "border-border bg-transparent"

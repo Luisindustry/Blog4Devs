@@ -31,10 +31,19 @@ export function UpvoteButton({ initialCount, className }: UpvoteButtonProps) {
       )}
     >
       <ChevronUp
-        className={cn("h-4 w-4 transition-transform", voted && "-translate-y-px")}
+        className={cn(
+          "h-4 w-4 transition-transform duration-300 [transition-timing-function:var(--ease-spring)]",
+          voted && "-translate-y-0.5 scale-110",
+        )}
         strokeWidth={2.5}
       />
-      <span data-testid="vote-count" className="font-mono text-[11px] leading-none">{count}</span>
+      <span
+        key={count}
+        data-testid="vote-count"
+        className="vote-pop font-mono text-[11px] leading-none"
+      >
+        {count}
+      </span>
     </button>
   );
 }

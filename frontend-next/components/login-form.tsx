@@ -34,7 +34,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
     return (
       <div className="space-y-4">
         <p className="font-mono text-xs text-muted-foreground">
-          // enlace enviado
+          {"// "}enlace enviado
         </p>
         <p className="text-sm text-foreground">
           Revisa tu correo <strong>{email}</strong> y haz clic en el enlace para{" "}
