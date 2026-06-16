@@ -37,6 +37,8 @@ services:
     environment:
       API_BASE_URL: http://backend:8000
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+      # Same value as the backend; lets the Next server verify the JWT signature.
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?Set AUTH_SECRET_KEY to a strong random value (openssl rand -hex 32)}
     ports:
       - "3000:3000"
     depends_on:

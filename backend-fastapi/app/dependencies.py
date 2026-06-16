@@ -62,3 +62,11 @@ def ensure_moderator(user: UserPublic) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Moderator role required",
         )
+
+
+def ensure_admin(user: UserPublic) -> None:
+    if user.role != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required",
+        )

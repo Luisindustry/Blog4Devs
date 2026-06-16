@@ -37,6 +37,14 @@ export async function Navbar() {
               >
                 mensajes
               </CarouselLink>
+              {user.role === "admin" && (
+                <Link
+                  href="/admin"
+                  className="font-mono text-xs text-amber-600/80 transition-colors hover:text-amber-500"
+                >
+                  admin
+                </Link>
+              )}
 
               <span className="h-4 w-px bg-border" aria-hidden />
 

@@ -190,3 +190,25 @@ export async function updateQuestionStatus(
   revalidatePath("/");
   return res.json();
 }
+
+export async function setUserRole(
+  username: string,
+  role: "junior" | "senior" | "admin",
+) {
+  const res = await fetchBackend(
+    `/users/${encodeURIComponent(username)}/role`,
+    {
+      method: "PATCH",
+      headers: await authHeaders(),
+      body: JSON.stringify({ role }),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(parseError(err, "Error al cambiar el rol"));
+  }
+
+  revalidatePath("/admin");
+  return res.json();
+}

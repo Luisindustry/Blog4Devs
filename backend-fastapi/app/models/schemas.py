@@ -118,6 +118,10 @@ class QuestionStatusUpdate(BaseModel):
     status: QuestionStatus
 
 
+class RoleUpdate(BaseModel):
+    role: UserRole
+
+
 class VoteResponse(BaseModel):
     votes: int
     voted: bool
