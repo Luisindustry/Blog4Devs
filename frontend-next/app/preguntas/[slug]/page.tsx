@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AnswerSection } from "@/components/answer-section";
+import { Markdown } from "@/components/markdown";
 import { fetchBackend, publicCache } from "@/lib/backend";
 import { formatDate } from "@/lib/date";
 import { getSession } from "@/lib/session";
@@ -108,8 +109,8 @@ export default async function QuestionPage({ params }: PageProps) {
           </ul>
         </header>
 
-        <section className="content" itemProp="text">
-          {question.content}
+        <section className="mt-7" itemProp="text">
+          <Markdown>{question.content}</Markdown>
         </section>
       </article>
 
@@ -117,6 +118,7 @@ export default async function QuestionPage({ params }: PageProps) {
         slug={question.slug}
         initialAnswers={question.answers}
         currentUsername={session?.username ?? null}
+        isQuestionAuthor={session?.username === question.author.username}
       />
     </main>
   );

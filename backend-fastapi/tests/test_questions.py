@@ -455,3 +455,59 @@ async def test_vote_nonexistent_question_returns_404(
 ):
     response = await client.post("/questions/no-existe/vote", headers=auth_headers)
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Accept answer
+# ---------------------------------------------------------------------------
+
+
+async def test_author_can_accept_answer(client: AsyncClient, auth_headers: dict):
+    created = (
+        await client.post("/questions/", json=question_payload(), headers=auth_headers)
+    ).json()
+
+    responder_id = await create_test_user(username="responder1")
+    responder = make_auth_headers(responder_id, "responder1")
+    answered = (
+        await client.post(
+            f"/questions/{created['slug']}/answers",
+            json={"content": "Una respuesta valida con mas de veinte caracteres."},
+            headers=responder,
+        )
+    ).json()
+    answer_id = answered["answers"][0]["answer_id"]
+
+    response = await client.post(
+        f"/questions/{created['slug']}/answers/{answer_id}/accept",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    accepted = next(
+        a for a in response.json()["answers"] if a["answer_id"] == answer_id
+    )
+    assert accepted["is_accepted"] is True
+
+
+async def test_non_author_cannot_accept_answer(
+    client: AsyncClient, auth_headers: dict
+):
+    created = (
+        await client.post("/questions/", json=question_payload(), headers=auth_headers)
+    ).json()
+    answered = (
+        await client.post(
+            f"/questions/{created['slug']}/answers",
+            json={"content": "Una respuesta valida con mas de veinte caracteres."},
+            headers=auth_headers,
+        )
+    ).json()
+    answer_id = answered["answers"][0]["answer_id"]
+
+    intruder_id = await create_test_user(username="intruso")
+    intruder = make_auth_headers(intruder_id, "intruso")
+    response = await client.post(
+        f"/questions/{created['slug']}/answers/{answer_id}/accept",
+        headers=intruder,
+    )
+    assert response.status_code == 403

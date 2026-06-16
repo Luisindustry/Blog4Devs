@@ -1,7 +1,6 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
 from typing import Any
 
 from bson import ObjectId
@@ -9,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.core.time import utc_now
 from app.dependencies import get_current_user, get_database
 from app.models.schemas import (
     ConversationCreate,
@@ -20,10 +20,6 @@ from app.models.schemas import (
 )
 
 router = APIRouter(prefix="/chats", tags=["chats"])
-
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 async def get_conversation_for_user(

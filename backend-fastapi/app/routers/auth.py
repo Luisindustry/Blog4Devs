@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.config import Settings, get_settings
+from app.core.time import utc_now
 from app.core.security import (
     create_session_token,
     generate_magic_token,
@@ -21,10 +22,6 @@ from app.models.schemas import (
 from app.services.email import send_magic_link
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def get_client_ip(request: Request) -> str:

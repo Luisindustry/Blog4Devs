@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { createAnswer } from "@/app/actions";
+import { acceptAnswer, createAnswer } from "@/app/actions";
+import { Markdown } from "@/components/markdown";
 import { formatDate } from "@/lib/date";
 import type { Answer } from "@/types/api";
 
@@ -11,14 +12,25 @@ type AnswerSectionProps = {
   slug: string;
   initialAnswers: Answer[];
   currentUsername: string | null;
+  isQuestionAuthor?: boolean;
 };
+
+type OptimisticAnswer = Answer & { isOptimistic?: boolean };
+
+type OptimisticAction =
+  | { type: "add"; answer: OptimisticAnswer }
+  | { type: "accept"; answerId: string };
 
 function AnswerItem({
   answer,
   index = 0,
+  canAccept = false,
+  onAccept,
 }: {
-  answer: Answer & { isOptimistic?: boolean };
+  answer: OptimisticAnswer;
   index?: number;
+  canAccept?: boolean;
+  onAccept?: () => void;
 }) {
   return (
     <article
@@ -35,9 +47,9 @@ function AnswerItem({
       itemScope
       itemType="https://schema.org/Answer"
     >
-      <p className="content" itemProp="text">
-        {answer.content}
-      </p>
+      <div itemProp="text">
+        <Markdown>{answer.content}</Markdown>
+      </div>
       <p className="answer-meta">
         {answer.isOptimistic ? "Publicando" : "Respondió"}{" "}
         <strong>{answer.author.username}</strong>
@@ -48,7 +60,18 @@ function AnswerItem({
             <time dateTime={answer.created_at}>{formatDate(answer.created_at)}</time>
           </>
         )}
-        {answer.is_accepted && " · Respuesta aceptada"}
+        {answer.is_accepted && " · Respuesta aceptada ✓"}
+        {canAccept && !answer.is_accepted && !answer.isOptimistic && onAccept && (
+          <>
+            {" · "}
+            <button
+              onClick={onAccept}
+              className="font-mono text-emerald-600 underline underline-offset-2 hover:text-emerald-500"
+            >
+              [aceptar]
+            </button>
+          </>
+        )}
       </p>
     </article>
   );
@@ -58,17 +81,23 @@ export function AnswerSection({
   slug,
   initialAnswers,
   currentUsername,
+  isQuestionAuthor = false,
 }: AnswerSectionProps) {
   const [isPending, startTransition] = useTransition();
   const [content, setContent] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [optimisticAnswers, dispatch] = useOptimistic(
-    initialAnswers,
-    (state: (Answer & { isOptimistic?: boolean })[], newAnswer: Answer & { isOptimistic?: boolean }) => [
-      ...state,
-      newAnswer,
-    ],
+    initialAnswers as OptimisticAnswer[],
+    (state: OptimisticAnswer[], action: OptimisticAction) => {
+      if (action.type === "add") return [...state, action.answer];
+      if (action.type === "accept")
+        return state.map((a) => ({
+          ...a,
+          is_accepted: a.answer_id === action.answerId,
+        }));
+      return state;
+    },
   );
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -88,7 +117,7 @@ export function AnswerSection({
       return;
     }
 
-    const tempAnswer: Answer & { isOptimistic: boolean } = {
+    const tempAnswer: OptimisticAnswer = {
       answer_id: `temp-${Date.now()}`,
       content: trimmed,
       author: { user_id: "temp", username: currentUsername, role: "junior" },
@@ -100,12 +129,24 @@ export function AnswerSection({
     setContent("");
 
     startTransition(async () => {
-      dispatch(tempAnswer);
+      dispatch({ type: "add", answer: tempAnswer });
       try {
         await createAnswer(slug, trimmed);
         toast.success("Respuesta publicada");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al publicar");
+      }
+    });
+  }
+
+  function handleAccept(answerId: string) {
+    startTransition(async () => {
+      dispatch({ type: "accept", answerId });
+      try {
+        await acceptAnswer(slug, answerId);
+        toast.success("Respuesta aceptada");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al aceptar");
       }
     });
   }
@@ -118,7 +159,13 @@ export function AnswerSection({
         <p className="meta">Aún no hay respuestas publicadas.</p>
       ) : (
         optimisticAnswers.map((answer, index) => (
-          <AnswerItem key={answer.answer_id} answer={answer} index={index} />
+          <AnswerItem
+            key={answer.answer_id}
+            answer={answer}
+            index={index}
+            canAccept={isQuestionAuthor}
+            onAccept={() => handleAccept(answer.answer_id)}
+          />
         ))
       )}
 

@@ -1,6 +1,5 @@
 import re
 import unicodedata
-from datetime import datetime, timezone
 from typing import Any
 
 from bson import ObjectId
@@ -9,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorDatabase
 from pymongo.errors import DuplicateKeyError
 
 from app.core.config import get_settings
+from app.core.time import utc_now
 from app.dependencies import (
     ensure_moderator,
     get_current_user,
@@ -29,16 +29,15 @@ from app.models.schemas import (
     UserRole,
     VoteResponse,
 )
-from app.services.webhooks import publish_question_created
+from app.services.webhooks import (
+    publish_question_created,
+    publish_question_status_changed,
+)
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
 # List endpoints exclude heavy fields; answers_count is stored denormalized.
 LIST_PROJECTION = {"content": 0, "answers": 0}
-
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def slugify(value: str) -> str:
@@ -280,6 +279,7 @@ async def update_question(
 async def update_question_status(
     slug: str,
     payload: QuestionStatusUpdate,
+    background_tasks: BackgroundTasks,
     current_user: UserPublic = Depends(get_current_user),
     database: AsyncIOMotorDatabase = Depends(get_database),
 ) -> QuestionPublic:
@@ -304,7 +304,13 @@ async def update_question_status(
             detail="Question not found",
         )
 
-    return serialize_question(updated)
+    public_question = serialize_question(updated)
+    background_tasks.add_task(
+        publish_question_status_changed,
+        public_question.model_dump(mode="json"),
+        payload.status.value,
+    )
+    return public_question
 
 
 @router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)
@@ -411,5 +417,50 @@ async def add_answer(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to add answer",
         )
+
+    return serialize_question(updated)
+
+
+@router.post(
+    "/{slug}/answers/{answer_id}/accept",
+    response_model=QuestionPublic,
+    response_model_by_alias=False,
+)
+async def accept_answer(
+    slug: str,
+    answer_id: str,
+    current_user: UserPublic = Depends(get_current_user),
+    database: AsyncIOMotorDatabase = Depends(get_database),
+) -> QuestionPublic:
+    question = await database.questions.find_one({"slug": slug})
+    if question is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found",
+        )
+
+    # Only the question's author can accept an answer.
+    if str(question.get("author", {}).get("user_id")) != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the question author can accept an answer",
+        )
+
+    answers = question.get("answers", [])
+    if not any(a.get("answer_id") == answer_id for a in answers):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Answer not found",
+        )
+
+    # A question has at most one accepted answer.
+    for a in answers:
+        a["is_accepted"] = a.get("answer_id") == answer_id
+
+    updated = await database.questions.find_one_and_update(
+        {"slug": slug},
+        {"$set": {"answers": answers}},
+        return_document=True,
+    )
 
     return serialize_question(updated)

@@ -154,6 +154,24 @@ export async function toggleVote(slug: string): Promise<VoteResult> {
   return res.json();
 }
 
+export async function acceptAnswer(slug: string, answerId: string) {
+  const res = await fetchBackend(
+    `/questions/${slug}/answers/${answerId}/accept`,
+    {
+      method: "POST",
+      headers: await authHeaders(),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(parseError(err, "Error al aceptar la respuesta"));
+  }
+
+  revalidatePath(`/preguntas/${slug}`);
+  return res.json();
+}
+
 export async function updateQuestionStatus(
   slug: string,
   status: "approved" | "rejected",

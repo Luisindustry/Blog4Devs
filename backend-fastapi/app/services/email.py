@@ -1,3 +1,4 @@
+import html
 import logging
 
 import httpx
@@ -10,10 +11,14 @@ RESEND_API_URL = "https://api.resend.com/emails"
 
 
 def magic_link_html(username: str, link: str) -> str:
+    # username is user-controlled; escape it to prevent HTML injection in the
+    # email body. The link is a server-generated URL but we escape it too.
+    safe_username = html.escape(username)
+    link = html.escape(link, quote=True)
     return f"""
     <div style="font-family: monospace; max-width: 480px; margin: 0 auto; padding: 24px;">
       <h2 style="margin-bottom: 8px;">blog4devs</h2>
-      <p>Hola <strong>{username}</strong>,</p>
+      <p>Hola <strong>{safe_username}</strong>,</p>
       <p>Haz clic en el siguiente enlace para confirmar tu correo e iniciar sesión:</p>
       <p style="margin: 24px 0;">
         <a href="{link}"

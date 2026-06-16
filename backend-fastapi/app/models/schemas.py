@@ -1,14 +1,12 @@
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 from typing import Annotated, Any
 
 from bson import ObjectId
 from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field, field_validator
 
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+from app.core.time import utc_now
 
 
 def validate_object_id(value: Any) -> str:
