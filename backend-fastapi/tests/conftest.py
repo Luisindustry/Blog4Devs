@@ -21,7 +21,14 @@ from app.main import create_app
 TEST_DB = "community_qa_test"
 MONGO_URI = os.environ["MONGODB_URI"]
 
-COLLECTIONS = ["questions", "users", "magic_links", "conversations", "messages"]
+COLLECTIONS = [
+    "questions",
+    "users",
+    "magic_links",
+    "conversations",
+    "messages",
+    "votes",
+]
 
 
 @pytest.fixture(autouse=True)

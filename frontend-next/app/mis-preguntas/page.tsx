@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { fetchBackend } from "@/lib/backend";
 import { formatRelativeTime } from "@/lib/date";
 import { getSession, getSessionToken } from "@/lib/session";
 import type { QuestionListResponse, QuestionSummary } from "@/types/api";
@@ -9,11 +10,9 @@ export const metadata: Metadata = {
   title: "Mis preguntas",
 };
 
-const apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
-
 async function fetchMyQuestions(token: string): Promise<QuestionSummary[]> {
   try {
-    const res = await fetch(`${apiBaseUrl}/questions/mine`, {
+    const res = await fetchBackend("/questions/mine", {
       cache: "no-store",
       headers: {
         Accept: "application/json",

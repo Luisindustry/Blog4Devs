@@ -5,6 +5,18 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { requestMagicLink, type MagicLinkResult } from "@/app/actions";
 
+// The backend builds the dev link with its configured FRONTEND_ORIGIN
+// (localhost), which breaks for anyone testing through a tunnel. Rebuild it
+// against the origin the visitor is actually on, keeping the token.
+function toLocalVerifyLink(devLink: string): string {
+  if (typeof window === "undefined") return devLink;
+  try {
+    return `${window.location.origin}/auth/verify${new URL(devLink).search}`;
+  } catch {
+    return devLink;
+  }
+}
+
 export function LoginForm({ initialError }: { initialError?: string }) {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -47,7 +59,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
           <p className="rounded border border-border p-3 font-mono text-xs text-muted-foreground">
             modo dev (sin RESEND_API_KEY):{" "}
             <a
-              href={result.dev_link}
+              href={toLocalVerifyLink(result.dev_link)}
               className="text-foreground underline underline-offset-4"
             >
               [entrar directamente]

@@ -8,7 +8,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorDatabase
 from pymongo.errors import DuplicateKeyError
 
-from app.dependencies import get_current_user, get_database
+from app.core.config import get_settings
+from app.dependencies import (
+    ensure_moderator,
+    get_current_user,
+    get_database,
+    get_optional_user,
+)
 from app.models.schemas import (
     AnswerCreate,
     AnswerInDB,
@@ -16,14 +22,19 @@ from app.models.schemas import (
     QuestionListResponse,
     QuestionPublic,
     QuestionStatus,
+    QuestionStatusUpdate,
     QuestionSummary,
     QuestionUpdate,
     UserPublic,
     UserRole,
+    VoteResponse,
 )
 from app.services.webhooks import publish_question_created
 
 router = APIRouter(prefix="/questions", tags=["questions"])
+
+# List endpoints exclude heavy fields; answers_count is stored denormalized.
+LIST_PROJECTION = {"content": 0, "answers": 0}
 
 
 def utc_now() -> datetime:
@@ -56,6 +67,28 @@ def ensure_owner_or_admin(document: dict[str, Any], user: UserPublic) -> None:
 
 def serialize_question(document: dict[str, Any]) -> QuestionPublic:
     return QuestionPublic.model_validate(document)
+
+
+def resolve_answers_count(document: dict[str, Any]) -> int:
+    if "answers_count" in document:
+        return int(document["answers_count"])
+    return len(document.get("answers", []))
+
+
+def can_view_question(document: dict[str, Any], user: UserPublic | None) -> bool:
+    if document.get("status") == QuestionStatus.APPROVED.value:
+        return True
+    if user is None:
+        return False
+    if user.role in (UserRole.ADMIN.value, UserRole.SENIOR.value):
+        return True
+    author_id = document.get("author", {}).get("user_id")
+    return str(author_id) == user.id
+
+
+def summary_from_document(document: dict[str, Any]) -> QuestionSummary:
+    doc = {**document, "answers_count": resolve_answers_count(document)}
+    return QuestionSummary.model_validate(doc)
 
 
 async def insert_with_unique_slug(
@@ -94,14 +127,23 @@ async def create_question(
     current_user: UserPublic = Depends(get_current_user),
     database: AsyncIOMotorDatabase = Depends(get_database),
 ) -> QuestionPublic:
+    settings = get_settings()
     questions = database.get_collection("questions")
+    # Auto-approve in local/dev so the feed works out of the box; require
+    # moderation in production.
+    initial_status = (
+        QuestionStatus.APPROVED.value
+        if settings.environment == "local"
+        else QuestionStatus.PENDING.value
+    )
     base_document = payload.model_dump(mode="python")
     base_document.update(
         {
             "author": user_to_author(current_user),
-            "status": QuestionStatus.PENDING.value,
+            "status": initial_status,
             "votes": 0,
             "answers": [],
+            "answers_count": 0,
             "created_at": utc_now(),
         }
     )
@@ -132,21 +174,24 @@ async def list_questions(
     tag: str | None = Query(default=None, min_length=1, max_length=50),
     database: AsyncIOMotorDatabase = Depends(get_database),
 ) -> QuestionListResponse:
+    # Public listings only expose approved questions unless a status is asked
+    # for explicitly (used by the moderation queue).
     query: dict[str, Any] = {}
     if status_filter is not None:
         query["status"] = status_filter.value
+    else:
+        query["status"] = QuestionStatus.APPROVED.value
     if tag is not None:
         query["tags"] = tag.strip().lower()
 
     col = database.get_collection("questions")
-    cursor = col.find(query, {"content": 0}).sort("created_at", -1).skip(skip).limit(limit)
+    cursor = (
+        col.find(query, LIST_PROJECTION).sort("created_at", -1).skip(skip).limit(limit)
+    )
     docs = await cursor.to_list(length=limit)
     total = await col.count_documents(query)
 
-    items = []
-    for doc in docs:
-        doc["answers_count"] = len(doc.get("answers", []))
-        items.append(QuestionSummary.model_validate(doc))
+    items = [summary_from_document(doc) for doc in docs]
 
     return QuestionListResponse(items=items, total=total, skip=skip, limit=limit)
 
@@ -161,14 +206,13 @@ async def list_my_questions(
     query = {"author.user_id": ObjectId(current_user.id)}
 
     col = database.get_collection("questions")
-    cursor = col.find(query, {"content": 0}).sort("created_at", -1).skip(skip).limit(limit)
+    cursor = (
+        col.find(query, LIST_PROJECTION).sort("created_at", -1).skip(skip).limit(limit)
+    )
     docs = await cursor.to_list(length=limit)
     total = await col.count_documents(query)
 
-    items = []
-    for doc in docs:
-        doc["answers_count"] = len(doc.get("answers", []))
-        items.append(QuestionSummary.model_validate(doc))
+    items = [summary_from_document(doc) for doc in docs]
 
     return QuestionListResponse(items=items, total=total, skip=skip, limit=limit)
 
@@ -176,11 +220,12 @@ async def list_my_questions(
 @router.get("/{slug}", response_model=QuestionPublic, response_model_by_alias=False)
 async def get_question_by_slug(
     slug: str,
+    viewer: UserPublic | None = Depends(get_optional_user),
     database: AsyncIOMotorDatabase = Depends(get_database),
 ) -> QuestionPublic:
     document = await database.questions.find_one({"slug": slug})
 
-    if document is None:
+    if document is None or not can_view_question(document, viewer):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question not found",
@@ -227,6 +272,41 @@ async def update_question(
     return serialize_question(updated)
 
 
+@router.patch(
+    "/{slug}/status",
+    response_model=QuestionPublic,
+    response_model_by_alias=False,
+)
+async def update_question_status(
+    slug: str,
+    payload: QuestionStatusUpdate,
+    current_user: UserPublic = Depends(get_current_user),
+    database: AsyncIOMotorDatabase = Depends(get_database),
+) -> QuestionPublic:
+    ensure_moderator(current_user)
+
+    existing = await database.questions.find_one({"slug": slug})
+    if existing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found",
+        )
+
+    updated = await database.questions.find_one_and_update(
+        {"slug": slug},
+        {"$set": {"status": payload.status.value}},
+        return_document=True,
+    )
+
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found",
+        )
+
+    return serialize_question(updated)
+
+
 @router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_question(
     slug: str,
@@ -242,6 +322,50 @@ async def delete_question(
     ensure_owner_or_admin(existing, current_user)
 
     await database.questions.delete_one({"slug": slug})
+    await database.votes.delete_many({"question_id": existing["_id"]})
+
+
+@router.post("/{slug}/vote", response_model=VoteResponse)
+async def toggle_vote(
+    slug: str,
+    current_user: UserPublic = Depends(get_current_user),
+    database: AsyncIOMotorDatabase = Depends(get_database),
+) -> VoteResponse:
+    question = await database.questions.find_one({"slug": slug}, {"_id": 1})
+    if question is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found",
+        )
+
+    question_id = question["_id"]
+    user_id = ObjectId(current_user.id)
+    votes_col = database.get_collection("votes")
+
+    # The unique (question_id, user_id) index makes the toggle race-safe:
+    # a successful insert means a new vote; a duplicate means we undo it.
+    try:
+        await votes_col.insert_one(
+            {"question_id": question_id, "user_id": user_id, "created_at": utc_now()}
+        )
+        inc, voted = 1, True
+    except DuplicateKeyError:
+        await votes_col.delete_one({"question_id": question_id, "user_id": user_id})
+        inc, voted = -1, False
+
+    updated = await database.questions.find_one_and_update(
+        {"_id": question_id},
+        {"$inc": {"votes": inc}},
+        projection={"votes": 1},
+        return_document=True,
+    )
+
+    new_votes = int(updated["votes"]) if updated else 0
+    if new_votes < 0:
+        await database.questions.update_one({"_id": question_id}, {"$set": {"votes": 0}})
+        new_votes = 0
+
+    return VoteResponse(votes=new_votes, voted=voted)
 
 
 @router.post(
@@ -278,7 +402,7 @@ async def add_answer(
 
     updated = await questions.find_one_and_update(
         {"slug": slug},
-        {"$push": {"answers": answer_doc}},
+        {"$push": {"answers": answer_doc}, "$inc": {"answers_count": 1}},
         return_document=True,
     )
 

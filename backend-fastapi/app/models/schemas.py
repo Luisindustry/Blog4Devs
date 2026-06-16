@@ -116,6 +116,15 @@ class QuestionUpdate(BaseModel):
         return normalized
 
 
+class QuestionStatusUpdate(BaseModel):
+    status: QuestionStatus
+
+
+class VoteResponse(BaseModel):
+    votes: int
+    voted: bool
+
+
 class QuestionListResponse(BaseModel):
     items: list[QuestionSummary]
     total: int

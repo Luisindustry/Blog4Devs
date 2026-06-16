@@ -1,7 +1,9 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEV_AUTH_SECRET = "dev-secret-change-me-in-production"
 
 
 class Settings(BaseSettings):
@@ -10,7 +12,7 @@ class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_database: str = "community_qa"
     frontend_origin: str = "http://localhost:3000"
-    auth_secret_key: str = "dev-secret-change-me-in-production"
+    auth_secret_key: str = _DEV_AUTH_SECRET
     magic_link_ttl_minutes: int = Field(default=15, ge=5, le=60)
     session_ttl_days: int = Field(default=30, ge=1, le=365)
     resend_api_key: str | None = None
@@ -23,6 +25,14 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def reject_default_secret_in_production(self) -> "Settings":
+        if self.environment == "production" and self.auth_secret_key == _DEV_AUTH_SECRET:
+            raise ValueError(
+                "AUTH_SECRET_KEY must be set to a strong random value when ENVIRONMENT=production"
+            )
+        return self
 
 
 @lru_cache

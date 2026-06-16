@@ -16,6 +16,10 @@ services:
     environment:
       APP_NAME: "Junior Senior QA API"
       ENVIRONMENT: production
+      # Required in production: generate with `openssl rand -hex 32`.
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?Set AUTH_SECRET_KEY to a strong random value (openssl rand -hex 32)}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-blog4devs <onboarding@resend.dev>}
       MONGODB_URI: mongodb://mongo:27017
       MONGODB_DATABASE: community_qa
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}

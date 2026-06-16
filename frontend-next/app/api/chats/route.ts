@@ -1,21 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionToken } from "@/lib/session";
-
-const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8000";
-
-async function requireToken(): Promise<string | NextResponse> {
-  const token = await getSessionToken();
-  if (!token) {
-    return NextResponse.json({ detail: "No autenticado" }, { status: 401 });
-  }
-  return token;
-}
+import { fetchBackend, requireToken } from "@/lib/backend";
 
 export async function GET() {
   const token = await requireToken();
   if (token instanceof NextResponse) return token;
 
-  const res = await fetch(`${API_BASE}/chats/`, {
+  const res = await fetchBackend("/chats/", {
     cache: "no-store",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -30,7 +20,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
 
-  const res = await fetch(`${API_BASE}/chats/`, {
+  const res = await fetchBackend("/chats/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

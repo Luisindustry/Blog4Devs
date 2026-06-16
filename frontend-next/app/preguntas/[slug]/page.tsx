@@ -1,8 +1,10 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AnswerSection } from "@/components/answer-section";
+import { fetchBackend, publicCache } from "@/lib/backend";
 import { formatDate } from "@/lib/date";
 import { getSession } from "@/lib/session";
 import type { Question } from "@/types/api";
@@ -11,13 +13,15 @@ type PageProps = {
   params: Promise<{ slug: string }>;
 };
 
-const apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const DETAIL_REVALIDATE_SECONDS = 300;
 
-async function fetchQuestion(slug: string): Promise<Question | null> {
-  const response = await fetch(`${apiBaseUrl}/questions/${encodeURIComponent(slug)}`, {
+// cache() dedupes the call shared by generateMetadata and the page within one
+// request; revalidate caches the approved question across requests (ISR).
+const fetchQuestion = cache(async (slug: string): Promise<Question | null> => {
+  const response = await fetchBackend(`/questions/${encodeURIComponent(slug)}`, {
     headers: { Accept: "application/json" },
-    cache: "no-store",
+    ...publicCache(DETAIL_REVALIDATE_SECONDS),
   });
 
   if (response.status === 404) return null;
@@ -27,7 +31,7 @@ async function fetchQuestion(slug: string): Promise<Question | null> {
   }
 
   return response.json() as Promise<Question>;
-}
+});
 
 function toExcerpt(value: string, maxLength = 155): string {
   const normalized = value.replace(/\s+/g, " ").trim();

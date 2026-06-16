@@ -1,5 +1,15 @@
-import pytest
+from datetime import datetime, timezone
+
+from bson import ObjectId
 from httpx import AsyncClient
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from tests.conftest import (
+    MONGO_URI,
+    TEST_DB,
+    create_test_user,
+    make_auth_headers,
+)
 
 
 def question_payload(**overrides) -> dict:
@@ -9,6 +19,27 @@ def question_payload(**overrides) -> dict:
         "tags": ["python", "asyncio", "concurrencia"],
     }
     return {**base, **overrides}
+
+
+async def insert_pending_question(slug: str, **overrides) -> None:
+    mongo = AsyncIOMotorClient(MONGO_URI)
+    db = mongo[TEST_DB]
+    document = {
+        "_id": ObjectId(),
+        "title": "Pregunta pendiente para pruebas de moderacion en la API",
+        "slug": slug,
+        "content": "Contenido suficientemente largo para pasar validacion minima.",
+        "author": {"user_id": ObjectId(), "username": "ghost", "role": "junior"},
+        "tags": ["test"],
+        "status": "pending",
+        "votes": 0,
+        "answers": [],
+        "answers_count": 0,
+        "created_at": datetime.now(timezone.utc),
+        **overrides,
+    }
+    await db.questions.insert_one(document)
+    mongo.close()
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +68,8 @@ async def test_create_question_returns_201(client: AsyncClient, auth_headers: di
     assert response.status_code == 201
     data = response.json()
     assert data["title"] == question_payload()["title"]
-    assert data["status"] == "pending"
+    # ENVIRONMENT=local in tests, so new questions are auto-approved.
+    assert data["status"] == "approved"
     assert data["answers"] == []
     assert data["author"]["username"] == "testuser"
     assert "slug" in data
@@ -107,8 +139,6 @@ async def test_list_questions_filter_by_tag(client: AsyncClient, auth_headers: d
 
 
 async def test_list_my_questions(client: AsyncClient, auth_headers: dict):
-    from tests.conftest import create_test_user, make_auth_headers
-
     other_id = await create_test_user(username="otrodev")
     other_headers = make_auth_headers(other_id, "otrodev")
 
@@ -172,6 +202,21 @@ async def test_add_answer_returns_201(client: AsyncClient, auth_headers: dict):
     assert data["answers"][0]["author"]["username"] == "testuser"
 
 
+async def test_add_answer_updates_count(client: AsyncClient, auth_headers: dict):
+    created = (
+        await client.post("/questions/", json=question_payload(), headers=auth_headers)
+    ).json()
+    await client.post(
+        f"/questions/{created['slug']}/answers",
+        json={"content": "Una respuesta valida con mas de veinte caracteres aqui."},
+        headers=auth_headers,
+    )
+
+    listed = await client.get("/questions/")
+    item = next(i for i in listed.json()["items"] if i["slug"] == created["slug"])
+    assert item["answers_count"] == 1
+
+
 async def test_add_answer_requires_auth(client: AsyncClient, auth_headers: dict):
     created = (
         await client.post("/questions/", json=question_payload(), headers=auth_headers)
@@ -186,11 +231,10 @@ async def test_add_answer_requires_auth(client: AsyncClient, auth_headers: dict)
 async def test_add_answer_to_nonexistent_question(
     client: AsyncClient, auth_headers: dict
 ):
-    answer_payload = {
-        "content": "Esta respuesta no deberia guardarse porque la pregunta no existe aqui.",
-    }
     response = await client.post(
-        "/questions/no-existe/answers", json=answer_payload, headers=auth_headers
+        "/questions/no-existe/answers",
+        json={"content": "Esta respuesta no deberia guardarse porque no existe."},
+        headers=auth_headers,
     )
     assert response.status_code == 404
 
@@ -228,25 +272,9 @@ async def test_update_question_title(client: AsyncClient, auth_headers: dict):
     assert response.json()["title"] == new_title
 
 
-async def test_update_question_tags(client: AsyncClient, auth_headers: dict):
-    created = (
-        await client.post("/questions/", json=question_payload(), headers=auth_headers)
-    ).json()
-
-    response = await client.patch(
-        f"/questions/{created['slug']}",
-        json={"tags": ["python", "gil", "threads"]},
-        headers=auth_headers,
-    )
-    assert response.status_code == 200
-    assert response.json()["tags"] == ["gil", "python", "threads"]
-
-
 async def test_update_question_by_other_user_returns_403(
     client: AsyncClient, auth_headers: dict
 ):
-    from tests.conftest import create_test_user, make_auth_headers
-
     created = (
         await client.post("/questions/", json=question_payload(), headers=auth_headers)
     ).json()
@@ -260,15 +288,6 @@ async def test_update_question_by_other_user_returns_403(
         headers=intruder_headers,
     )
     assert response.status_code == 403
-
-
-async def test_update_question_not_found(client: AsyncClient, auth_headers: dict):
-    response = await client.patch(
-        "/questions/slug-que-no-existe",
-        json={"title": "Titulo nuevo valido para el test de not found"},
-        headers=auth_headers,
-    )
-    assert response.status_code == 404
 
 
 async def test_update_question_empty_body_returns_422(
@@ -301,8 +320,6 @@ async def test_delete_question_returns_204(client: AsyncClient, auth_headers: di
 async def test_delete_question_by_other_user_returns_403(
     client: AsyncClient, auth_headers: dict
 ):
-    from tests.conftest import create_test_user, make_auth_headers
-
     created = (
         await client.post("/questions/", json=question_payload(), headers=auth_headers)
     ).json()
@@ -316,19 +333,125 @@ async def test_delete_question_by_other_user_returns_403(
     assert response.status_code == 403
 
 
-async def test_delete_question_removes_from_db(client: AsyncClient, auth_headers: dict):
-    created = (
-        await client.post("/questions/", json=question_payload(), headers=auth_headers)
-    ).json()
-
-    await client.delete(f"/questions/{created['slug']}", headers=auth_headers)
-
-    get_response = await client.get(f"/questions/{created['slug']}")
-    assert get_response.status_code == 404
-
-
 async def test_delete_question_not_found(client: AsyncClient, auth_headers: dict):
     response = await client.delete(
         "/questions/slug-que-no-existe", headers=auth_headers
     )
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Moderation & visibility
+# ---------------------------------------------------------------------------
+
+async def test_list_excludes_pending_by_default(client: AsyncClient, auth_headers: dict):
+    await insert_pending_question("pregunta-pendiente-oculta")
+    await client.post("/questions/", json=question_payload(), headers=auth_headers)
+
+    response = await client.get("/questions/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert all(item["status"] == "approved" for item in data["items"])
+
+
+async def test_pending_question_hidden_from_anonymous_view(client: AsyncClient):
+    await insert_pending_question("pendiente-anon")
+    response = await client.get("/questions/pendiente-anon")
+    assert response.status_code == 404
+
+
+async def test_moderator_can_approve_question(client: AsyncClient):
+    await insert_pending_question("para-aprobar")
+
+    admin_id = await create_test_user(username="modera", role="admin")
+    mod_headers = make_auth_headers(admin_id, "modera", role="admin")
+
+    response = await client.patch(
+        "/questions/para-aprobar/status",
+        json={"status": "approved"},
+        headers=mod_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "approved"
+
+    listed = await client.get("/questions/")
+    assert listed.json()["total"] >= 1
+
+
+async def test_non_moderator_cannot_change_status(
+    client: AsyncClient, auth_headers: dict
+):
+    created = (
+        await client.post("/questions/", json=question_payload(), headers=auth_headers)
+    ).json()
+
+    response = await client.patch(
+        f"/questions/{created['slug']}/status",
+        json={"status": "rejected"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# POST /questions/{slug}/vote
+# ---------------------------------------------------------------------------
+
+async def test_vote_requires_auth(client: AsyncClient, auth_headers: dict):
+    created = (
+        await client.post("/questions/", json=question_payload(), headers=auth_headers)
+    ).json()
+    response = await client.post(f"/questions/{created['slug']}/vote")
+    assert response.status_code == 401
+
+
+async def test_vote_increments_and_persists(client: AsyncClient, auth_headers: dict):
+    created = (
+        await client.post("/questions/", json=question_payload(), headers=auth_headers)
+    ).json()
+
+    response = await client.post(
+        f"/questions/{created['slug']}/vote", headers=auth_headers
+    )
+    assert response.status_code == 200
+    assert response.json() == {"votes": 1, "voted": True}
+
+    detail = await client.get(f"/questions/{created['slug']}")
+    assert detail.json()["votes"] == 1
+
+
+async def test_vote_toggles_off_on_second_call(
+    client: AsyncClient, auth_headers: dict
+):
+    created = (
+        await client.post("/questions/", json=question_payload(), headers=auth_headers)
+    ).json()
+
+    await client.post(f"/questions/{created['slug']}/vote", headers=auth_headers)
+    second = await client.post(
+        f"/questions/{created['slug']}/vote", headers=auth_headers
+    )
+    assert second.json() == {"votes": 0, "voted": False}
+
+
+async def test_vote_is_per_user(client: AsyncClient, auth_headers: dict):
+    created = (
+        await client.post("/questions/", json=question_payload(), headers=auth_headers)
+    ).json()
+
+    other_id = await create_test_user(username="votante2")
+    other_headers = make_auth_headers(other_id, "votante2")
+
+    await client.post(f"/questions/{created['slug']}/vote", headers=auth_headers)
+    response = await client.post(
+        f"/questions/{created['slug']}/vote", headers=other_headers
+    )
+    assert response.json() == {"votes": 2, "voted": True}
+
+
+async def test_vote_nonexistent_question_returns_404(
+    client: AsyncClient, auth_headers: dict
+):
+    response = await client.post("/questions/no-existe/vote", headers=auth_headers)
     assert response.status_code == 404

@@ -9,6 +9,7 @@ import {
   createQuestion,
   deleteQuestion,
   updateQuestion,
+  updateQuestionStatus,
   type QuestionFormData,
 } from "@/app/actions";
 import { formatRelativeTime } from "@/lib/date";
@@ -41,11 +42,15 @@ function makeOptimisticItem(
 
 export function QuestionFeed({
   initialQuestions,
+  pendingQuestions = [],
   currentUsername,
+  isModerator = false,
   isAdmin = false,
 }: {
   initialQuestions: QuestionSummary[];
+  pendingQuestions?: QuestionSummary[];
   currentUsername: string | null;
+  isModerator?: boolean;
   isAdmin?: boolean;
 }) {
   const router = useRouter();
@@ -70,6 +75,16 @@ export function QuestionFeed({
         default:
           return state;
       }
+    },
+  );
+
+  const [optimisticPending, dispatchPending] = useOptimistic(
+    pendingQuestions,
+    (state: QuestionSummary[], action: OptimisticAction) => {
+      if (action.type === "delete") {
+        return state.filter((q) => q.id !== action.id);
+      }
+      return state;
     },
   );
 
@@ -179,6 +194,49 @@ export function QuestionFeed({
     });
   }
 
+  function handleModerate(
+    question: QuestionSummary,
+    status: "approved" | "rejected",
+  ) {
+    startTransition(async () => {
+      dispatchPending({ type: "delete", id: question.id });
+      try {
+        await updateQuestionStatus(question.slug, status);
+        toast.success(
+          status === "approved" ? "Pregunta aprobada" : "Pregunta rechazada",
+        );
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al moderar");
+        router.refresh();
+      }
+    });
+  }
+
+  function renderCard(q: QuestionSummary, index: number, moderation = false) {
+    return (
+      <QuestionCard
+        key={q.id}
+        index={index}
+        id={q.id}
+        slug={q.slug}
+        title={q.title}
+        tags={q.tags}
+        author={q.author.username}
+        votes={q.votes}
+        answersCount={q.answers_count}
+        createdAt={formatRelativeTime(q.created_at)}
+        status={q.status}
+        canVote={currentUsername !== null}
+        isPendingDelete={pendingDeleteId === q.id}
+        onEdit={canModify(q) ? () => handleEdit(q) : undefined}
+        onDelete={canModify(q) ? () => handleDelete(q) : undefined}
+        onApprove={moderation ? () => handleModerate(q, "approved") : undefined}
+        onReject={moderation ? () => handleModerate(q, "rejected") : undefined}
+      />
+    );
+  }
+
   return (
     <>
       {/* Keyboard hint */}
@@ -202,6 +260,16 @@ export function QuestionFeed({
         )}
       </p>
 
+      {/* Moderation queue */}
+      {isModerator && optimisticPending.length > 0 && (
+        <section className="mb-8 rounded border border-amber-500/30 bg-amber-500/5 p-3">
+          <h3 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-amber-600/80">
+            Pendientes de moderación ({optimisticPending.length})
+          </h3>
+          <div>{optimisticPending.map((q, i) => renderCard(q, i, true))}</div>
+        </section>
+      )}
+
       {optimisticItems.length === 0 ? (
         <p className="py-12 text-center font-mono text-sm text-muted-foreground">
           No hay preguntas todavía.{" "}
@@ -213,25 +281,7 @@ export function QuestionFeed({
           </button>
         </p>
       ) : (
-        <div>
-          {optimisticItems.map((q, index) => (
-            <QuestionCard
-              key={q.id}
-              index={index}
-              id={q.id}
-              slug={q.slug}
-              title={q.title}
-              tags={q.tags}
-              author={q.author.username}
-              votes={q.votes}
-              answersCount={q.answers_count}
-              createdAt={formatRelativeTime(q.created_at)}
-              isPendingDelete={pendingDeleteId === q.id}
-              onEdit={canModify(q) ? () => handleEdit(q) : undefined}
-              onDelete={canModify(q) ? () => handleDelete(q) : undefined}
-            />
-          ))}
-        </div>
+        <div>{optimisticItems.map((q, index) => renderCard(q, index))}</div>
       )}
 
       <QuestionSheet

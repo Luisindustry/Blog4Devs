@@ -51,6 +51,12 @@ async def connect_to_mongo(uri: str, database_name: str) -> tuple[AsyncIOMotorCl
         name="ttl_magic_links_expires_at",
     )
 
+    await database.votes.create_index(
+        [("question_id", ASCENDING), ("user_id", ASCENDING)],
+        unique=True,
+        name="uq_votes_question_user",
+    )
+
     await database.conversations.create_index(
         [("participant_ids", ASCENDING)],
         name="idx_conversations_participants",
@@ -58,6 +64,12 @@ async def connect_to_mongo(uri: str, database_name: str) -> tuple[AsyncIOMotorCl
     await database.messages.create_index(
         [("conversation_id", ASCENDING), ("_id", ASCENDING)],
         name="idx_messages_conversation",
+    )
+
+    # Backfill answers_count for documents created before denormalization.
+    await database.questions.update_many(
+        {"answers_count": {"$exists": False}},
+        [{"$set": {"answers_count": {"$size": {"$ifNull": ["$answers", []]}}}}],
     )
 
     return client, database

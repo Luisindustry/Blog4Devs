@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 import type { QuestionFormData } from "@/app/actions";
 import type { QuestionSummary } from "@/types/api";
+
+// Keep in sync with backend validation (app/models/schemas.py)
+const TITLE_MIN = 10;
+const CONTENT_MIN = 30;
+const TAGS_MAX = 8;
 
 type QuestionSheetProps = {
   open: boolean;
@@ -57,17 +64,36 @@ export function QuestionSheet({
     }
   }, [open]);
 
+  const trimmedTitle = title.trim();
+  const trimmedBody = body.trim();
+
   function handleSubmit() {
     const parsedTags = tags
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
 
-    if (!title.trim() || !body.trim() || parsedTags.length === 0) return;
+    if (trimmedTitle.length < TITLE_MIN) {
+      toast.error(`El título necesita al menos ${TITLE_MIN} caracteres`);
+      titleRef.current?.focus();
+      return;
+    }
+    if (trimmedBody.length < CONTENT_MIN) {
+      toast.error(`El contenido necesita al menos ${CONTENT_MIN} caracteres`);
+      return;
+    }
+    if (parsedTags.length === 0) {
+      toast.error("Agrega al menos un tag");
+      return;
+    }
+    if (parsedTags.length > TAGS_MAX) {
+      toast.error(`Máximo ${TAGS_MAX} tags`);
+      return;
+    }
 
     onSubmit({
-      title: title.trim(),
-      content: body.trim(),
+      title: trimmedTitle,
+      content: trimmedBody,
       tags: parsedTags,
     });
   }
@@ -95,9 +121,21 @@ export function QuestionSheet({
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto">
           {/* Título */}
           <div className="space-y-2">
-            <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              título
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                título
+              </label>
+              <span
+                className={cn(
+                  "font-mono text-[10px]",
+                  trimmedTitle.length >= TITLE_MIN
+                    ? "text-muted-foreground/40"
+                    : "text-amber-500/80",
+                )}
+              >
+                {trimmedTitle.length}/{TITLE_MIN} mín
+              </span>
+            </div>
             <input
               ref={titleRef}
               value={title}
@@ -122,12 +160,24 @@ export function QuestionSheet({
 
           {/* Contenido */}
           <div className="flex flex-1 flex-col space-y-2">
-            <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              contenido
-              {loadingContent && (
-                <span className="ml-2 text-muted-foreground/40">(cargando...)</span>
-              )}
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                contenido
+                {loadingContent && (
+                  <span className="ml-2 text-muted-foreground/40">(cargando...)</span>
+                )}
+              </label>
+              <span
+                className={cn(
+                  "font-mono text-[10px]",
+                  trimmedBody.length >= CONTENT_MIN
+                    ? "text-muted-foreground/40"
+                    : "text-amber-500/80",
+                )}
+              >
+                {trimmedBody.length}/{CONTENT_MIN} mín
+              </span>
+            </div>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}

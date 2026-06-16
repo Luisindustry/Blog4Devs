@@ -1,21 +1,38 @@
 import Link from "next/link";
 import { QuestionFeed } from "@/components/question-feed";
-import { getSession } from "@/lib/session";
-import type { QuestionListResponse, QuestionSummary } from "@/types/api";
+import { fetchBackend, publicCache } from "@/lib/backend";
+import { getSession, type SessionUser } from "@/lib/session";
+import type { QuestionListResponse, QuestionStatus, QuestionSummary } from "@/types/api";
 
-const apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
+// Public feed revalidates on the server (ISR in prod); the moderation queue
+// stays fresh. Mutations call revalidatePath("/") to bust the cache.
+const PUBLIC_FEED_REVALIDATE_SECONDS = 60;
 
 type PageProps = {
   searchParams: Promise<{ tag?: string }>;
 };
 
-async function fetchRecentQuestions(tag?: string): Promise<QuestionSummary[]> {
+function isModerator(session: SessionUser | null): boolean {
+  return session?.role === "admin" || session?.role === "senior";
+}
+
+async function fetchRecentQuestions(
+  tag?: string,
+  status?: QuestionStatus,
+): Promise<QuestionSummary[]> {
   try {
     const params = new URLSearchParams({ limit: "20" });
     if (tag) params.set("tag", tag);
+    if (status) params.set("status", status);
 
-    const res = await fetch(`${apiBaseUrl}/questions/?${params.toString()}`, {
-      cache: "no-store",
+    // Pending queue must be fresh; the approved public feed can be cached.
+    const cacheOptions: RequestInit =
+      status === "pending"
+        ? { cache: "no-store" }
+        : publicCache(PUBLIC_FEED_REVALIDATE_SECONDS);
+
+    const res = await fetchBackend(`/questions/?${params.toString()}`, {
+      ...cacheOptions,
       headers: { Accept: "application/json" },
     });
     if (!res.ok) return [];
@@ -28,9 +45,12 @@ async function fetchRecentQuestions(tag?: string): Promise<QuestionSummary[]> {
 
 export default async function HomePage({ searchParams }: PageProps) {
   const { tag } = await searchParams;
-  const [questions, session] = await Promise.all([
+  const session = await getSession();
+  const moderator = isModerator(session);
+
+  const [questions, pendingQuestions] = await Promise.all([
     fetchRecentQuestions(tag),
-    getSession(),
+    moderator ? fetchRecentQuestions(tag, "pending") : Promise.resolve([]),
   ]);
 
   return (
@@ -68,7 +88,9 @@ export default async function HomePage({ searchParams }: PageProps) {
         </div>
         <QuestionFeed
           initialQuestions={questions}
+          pendingQuestions={pendingQuestions}
           currentUsername={session?.username ?? null}
+          isModerator={moderator}
           isAdmin={session?.role === "admin"}
         />
       </section>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { signOut } from "@/app/actions";
+import { CarouselLink } from "@/components/carousel-link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -11,31 +12,42 @@ export async function Navbar() {
   return (
     <header className="fixed top-0 z-50 w-full border-b border-border bg-background/90 backdrop-blur-sm">
       <div className="mx-auto flex h-12 max-w-3xl items-center justify-between px-4">
-        <Link
+        <CarouselLink
           href="/"
           className="font-mono text-sm font-medium tracking-tight text-foreground transition-colors hover:text-muted-foreground"
         >
           blog4devs
-        </Link>
+        </CarouselLink>
 
         <nav className="flex items-center gap-3">
           {user ? (
             <>
-              <Link
+              {/* Sections */}
+              <CarouselLink
                 href="/mis-preguntas"
                 className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+                activeClassName="text-foreground underline decoration-muted-foreground/50 underline-offset-[6px]"
               >
                 mis preguntas
-              </Link>
-              <Link
+              </CarouselLink>
+              <CarouselLink
                 href="/mensajes"
                 className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+                activeClassName="text-foreground underline decoration-muted-foreground/50 underline-offset-[6px]"
               >
                 mensajes
-              </Link>
+              </CarouselLink>
+
+              <span className="h-4 w-px bg-border" aria-hidden />
+
+              {/* Identity */}
               <span className="font-mono text-xs text-foreground">
                 @{user.username}
               </span>
+
+              <span className="h-4 w-px bg-border" aria-hidden />
+
+              {/* Account actions */}
               <form action={signOut}>
                 <button
                   type="submit"
@@ -44,19 +56,22 @@ export async function Navbar() {
                   [salir]
                 </button>
               </form>
+              <ThemeToggle />
             </>
           ) : (
-            <Link
-              href="/login"
-              className={cn(
-                buttonVariants({ variant: "outline", size: "sm" }),
-                "h-7 border-border px-3 font-mono text-xs text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Sign In
-            </Link>
+            <>
+              <Link
+                href="/login"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "h-7 border-border px-3 font-mono text-xs text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Sign In
+              </Link>
+              <ThemeToggle />
+            </>
           )}
-          <ThemeToggle />
         </nav>
       </div>
     </header>

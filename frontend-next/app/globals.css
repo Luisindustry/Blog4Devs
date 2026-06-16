@@ -124,6 +124,7 @@
     }
     body {
         @apply bg-background text-foreground;
+        overflow-x: clip;
     }
     html {
         @apply font-sans;
@@ -163,6 +164,41 @@ header,
             opacity: 1;
             transform: none;
             filter: none;
+        }
+    }
+
+    /* Carousel swipe: pages rotate in like faces of a cylinder.
+       Direction is decided in carousel-nav.ts:
+         /mensajes  ←  /  →  /mis-preguntas                     */
+    .swipe-from-right {
+        animation: swipe-from-right 0.55s var(--ease-out-expo) both;
+        transform-origin: center center;
+    }
+
+    @keyframes swipe-from-right {
+        from {
+            opacity: 0;
+            transform: perspective(1400px) translateX(22%) rotateY(-42deg);
+        }
+        to {
+            opacity: 1;
+            transform: perspective(1400px) translateX(0) rotateY(0deg);
+        }
+    }
+
+    .swipe-from-left {
+        animation: swipe-from-left 0.55s var(--ease-out-expo) both;
+        transform-origin: center center;
+    }
+
+    @keyframes swipe-from-left {
+        from {
+            opacity: 0;
+            transform: perspective(1400px) translateX(-22%) rotateY(42deg);
+        }
+        to {
+            opacity: 1;
+            transform: perspective(1400px) translateX(0) rotateY(0deg);
         }
     }
 
@@ -251,7 +287,7 @@ header,
 }
 
 .question-header {
-    border-bottom: 1px solid oklch(0.21 0 0);
+    border-bottom: 1px solid var(--border);
     padding-bottom: 24px;
 }
 
@@ -260,12 +296,12 @@ header,
     font-weight: 600;
     line-height: 1.2;
     margin: 0 0 16px;
-    color: oklch(0.985 0 0);
+    color: var(--foreground);
 }
 
 .meta,
 .answer-meta {
-    color: oklch(0.491 0 0);
+    color: var(--muted-foreground);
     font-family: var(--font-mono, ui-monospace);
     font-size: 0.8rem;
 }
@@ -280,23 +316,24 @@ header,
 }
 
 .tag {
-    background: oklch(0.21 0 0);
-    border: 1px solid oklch(0.29 0 0);
+    background: var(--secondary);
+    border: 1px solid var(--border);
     border-radius: 3px;
-    color: oklch(0.678 0 0);
+    color: var(--muted-foreground);
     cursor: pointer;
     font-family: var(--font-mono, ui-monospace);
     font-size: 0.72rem;
     padding: 2px 8px;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, color 0.15s;
 }
 
 .tag:hover {
-    border-color: oklch(0.491 0 0);
+    border-color: var(--ring);
+    color: var(--foreground);
 }
 
 .content {
-    color: oklch(0.856 0 0);
+    color: var(--foreground);
     font-size: 0.975rem;
     line-height: 1.85;
     margin-top: 28px;
@@ -308,13 +345,13 @@ header,
 }
 
 .answer {
-    background: oklch(0.141 0 0);
-    border: 1px solid oklch(0.21 0 0);
+    background: var(--card);
+    border: 1px solid var(--border);
     border-radius: 6px;
     margin-top: 10px;
     padding: 18px 20px;
 }
 
 .accepted {
-    border-color: oklch(0.488 0.243 264.376);
+    border-color: oklch(0.55 0.2 264);
 }

@@ -3,9 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { fetchBackend } from "@/lib/backend";
 import { SESSION_COOKIE, getSessionToken } from "@/lib/session";
-
-const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8000";
 
 export type QuestionFormData = {
   title: string;
@@ -17,6 +16,11 @@ export type MagicLinkResult = {
   sent: boolean;
   is_new_user: boolean;
   dev_link: string | null;
+};
+
+export type VoteResult = {
+  votes: number;
+  voted: boolean;
 };
 
 function parseError(err: Record<string, unknown>, fallback: string): string {
@@ -44,7 +48,7 @@ export async function requestMagicLink(
   const body: Record<string, string> = { email };
   if (username.trim()) body.username = username.trim();
 
-  const res = await fetch(`${API_BASE}/auth/request-link`, {
+  const res = await fetchBackend("/auth/request-link", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -65,7 +69,7 @@ export async function signOut() {
 }
 
 export async function createQuestion(data: QuestionFormData) {
-  const res = await fetch(`${API_BASE}/questions/`, {
+  const res = await fetchBackend("/questions/", {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({
@@ -85,7 +89,7 @@ export async function createQuestion(data: QuestionFormData) {
 }
 
 export async function updateQuestion(slug: string, data: QuestionFormData) {
-  const res = await fetch(`${API_BASE}/questions/${slug}`, {
+  const res = await fetchBackend(`/questions/${slug}`, {
     method: "PATCH",
     headers: await authHeaders(),
     body: JSON.stringify({
@@ -101,10 +105,11 @@ export async function updateQuestion(slug: string, data: QuestionFormData) {
   }
 
   revalidatePath("/");
+  revalidatePath(`/preguntas/${slug}`);
 }
 
 export async function createAnswer(slug: string, content: string) {
-  const res = await fetch(`${API_BASE}/questions/${slug}/answers`, {
+  const res = await fetchBackend(`/questions/${slug}/answers`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ content }),
@@ -120,7 +125,7 @@ export async function createAnswer(slug: string, content: string) {
 }
 
 export async function deleteQuestion(slug: string) {
-  const res = await fetch(`${API_BASE}/questions/${slug}`, {
+  const res = await fetchBackend(`/questions/${slug}`, {
     method: "DELETE",
     headers: await authHeaders(),
   });
@@ -131,4 +136,39 @@ export async function deleteQuestion(slug: string) {
   }
 
   revalidatePath("/");
+}
+
+export async function toggleVote(slug: string): Promise<VoteResult> {
+  // No revalidatePath here: votes are high-frequency and the authoritative
+  // count comes back in the response, so we avoid busting the feed cache.
+  const res = await fetchBackend(`/questions/${slug}/vote`, {
+    method: "POST",
+    headers: await authHeaders(),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(parseError(err, "Error al votar"));
+  }
+
+  return res.json();
+}
+
+export async function updateQuestionStatus(
+  slug: string,
+  status: "approved" | "rejected",
+) {
+  const res = await fetchBackend(`/questions/${slug}/status`, {
+    method: "PATCH",
+    headers: await authHeaders(),
+    body: JSON.stringify({ status }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(parseError(err, "Error al moderar la pregunta"));
+  }
+
+  revalidatePath("/");
+  return res.json();
 }

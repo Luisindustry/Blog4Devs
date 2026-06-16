@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { UpvoteButton } from "@/components/upvote-button";
 
+import type { QuestionStatus } from "@/types/api";
+
 export type QuestionCardProps = {
   id: string;
   slug: string;
@@ -14,10 +16,14 @@ export type QuestionCardProps = {
   votes: number;
   answersCount: number;
   createdAt: string;
+  status?: QuestionStatus;
   index?: number;
+  canVote?: boolean;
   isPendingDelete?: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
+  onApprove?: () => void;
+  onReject?: () => void;
 };
 
 function DeleteButton({ onDelete }: { onDelete: () => void }) {
@@ -56,9 +62,12 @@ export function QuestionCard({
   answersCount,
   createdAt,
   index = 0,
+  canVote = false,
   isPendingDelete,
   onEdit,
   onDelete,
+  onApprove,
+  onReject,
 }: QuestionCardProps) {
   return (
     <div
@@ -66,7 +75,7 @@ export function QuestionCard({
       style={{ "--stagger": index } as React.CSSProperties}
       className="feed-item group flex items-start gap-1 border-b border-border px-1 py-4 transition-colors duration-300 hover:bg-muted/20"
     >
-      <UpvoteButton initialCount={votes} />
+      <UpvoteButton slug={slug} initialCount={votes} canVote={canVote} />
 
       <div className="min-w-0 flex-1 pl-1">
         <div className="flex items-start justify-between gap-3">
@@ -82,8 +91,24 @@ export function QuestionCard({
             </h3>
           </Link>
 
-          {(onEdit || onDelete) && (
+          {(onEdit || onDelete || onApprove || onReject) && (
             <div className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+              {onApprove && (
+                <button
+                  onClick={onApprove}
+                  className="font-mono text-[10px] text-emerald-600 hover:text-emerald-500"
+                >
+                  [aprobar]
+                </button>
+              )}
+              {onReject && (
+                <button
+                  onClick={onReject}
+                  className="font-mono text-[10px] text-red-600 hover:text-red-500"
+                >
+                  [rechazar]
+                </button>
+              )}
               {onEdit && (
                 <button
                   onClick={onEdit}

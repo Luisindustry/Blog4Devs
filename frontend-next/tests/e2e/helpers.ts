@@ -1,4 +1,7 @@
+import type { BrowserContext } from "@playwright/test";
+
 export const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8000";
+const APP_URL = process.env.BASE_URL ?? "http://localhost:3000";
 
 // Unique suffix per test-run so titles don't collide across runs
 const RUN_ID = Math.random().toString(36).slice(2, 7);
@@ -52,6 +55,15 @@ export async function getAuthToken(): Promise<string> {
   const { access_token: accessToken } = await verifyRes.json();
   cachedToken = accessToken;
   return accessToken;
+}
+
+/**
+ * Logs the browser in by injecting the session cookie, so tests that exercise
+ * authenticated UI (e.g. voting) work without going through the login form.
+ */
+export async function authenticateBrowser(context: BrowserContext): Promise<void> {
+  const token = await getAuthToken();
+  await context.addCookies([{ name: "b4d_session", value: token, url: APP_URL }]);
 }
 
 type SeedOptions = {
