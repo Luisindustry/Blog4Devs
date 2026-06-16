@@ -5,8 +5,6 @@ import { toast } from "sonner";
 import { formatRelativeTime } from "@/lib/date";
 import type { ChatMessage, Conversation } from "@/types/api";
 
-const POLL_INTERVAL_MS = 4000;
-
 function otherParticipant(conversation: Conversation, me: string): string {
   const other = conversation.participants.find((p) => p.username !== me);
   return other?.username ?? me;
@@ -28,7 +26,6 @@ export function ChatPanel({
   const [loaded, setLoaded] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
-  const lastMessageIdRef = useRef<string | null>(null);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -72,42 +69,27 @@ export function ChatPanel({
     }
   }, [loadConversations, openConversationWith, startWith]);
 
-  // Reset messages when switching conversation
+  // Subscribe to the conversation's live message stream (SSE). Replaces the
+  // previous 4s polling with a single long-lived connection per conversation.
   useEffect(() => {
     setMessages([]);
-    lastMessageIdRef.current = null;
-  }, [activeId]);
-
-  // Poll messages for the active conversation
-  useEffect(() => {
     if (!activeId) return;
 
-    let cancelled = false;
-
-    async function poll() {
+    const source = new EventSource(`/api/chats/${activeId}/stream`);
+    source.onmessage = (event) => {
       try {
-        const params = new URLSearchParams();
-        if (lastMessageIdRef.current) {
-          params.set("after_id", lastMessageIdRef.current);
-        }
-        const res = await fetch(`/api/chats/${activeId}/messages?${params}`);
-        if (!res.ok || cancelled) return;
-        const data: { items: ChatMessage[] } = await res.json();
-        if (data.items.length > 0 && !cancelled) {
-          lastMessageIdRef.current = data.items[data.items.length - 1].id;
-          setMessages((prev) => [...prev, ...data.items]);
-        }
+        const message: ChatMessage = JSON.parse(event.data);
+        setMessages((prev) =>
+          prev.some((m) => m.id === message.id) ? prev : [...prev, message],
+        );
       } catch {
-        // siguiente poll reintenta
+        // ignore malformed event
       }
-    }
-
-    poll();
-    const interval = setInterval(poll, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
     };
+    // EventSource auto-reconnects on error; the id-dedupe above keeps the
+    // message list clean when the stream replays after a reconnect.
+
+    return () => source.close();
   }, [activeId]);
 
   // Auto-scroll on new messages
@@ -133,8 +115,9 @@ export function ChatPanel({
         setDraft(content);
         return;
       }
-      lastMessageIdRef.current = data.id;
-      setMessages((prev) => [...prev, data]);
+      setMessages((prev) =>
+        prev.some((m) => m.id === data.id) ? prev : [...prev, data],
+      );
       loadConversations();
     } catch {
       toast.error("No se pudo enviar el mensaje");

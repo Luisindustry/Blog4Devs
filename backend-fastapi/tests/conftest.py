@@ -28,6 +28,7 @@ COLLECTIONS = [
     "conversations",
     "messages",
     "votes",
+    "auth_attempts",
 ]
 
 

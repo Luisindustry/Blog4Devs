@@ -114,3 +114,30 @@ async def test_outsider_cannot_read_conversation(client: AsyncClient):
         f"/chats/{conversation_id}/messages", headers=intruder
     )
     assert response.status_code == 404
+
+
+# The SSE stream's access control runs before streaming starts, so these
+# error cases return immediately (no hanging stream to read).
+
+async def test_stream_requires_auth(client: AsyncClient):
+    ana, _leo = await two_users()
+    conversation_id = (
+        await client.post("/chats/", json={"username": "leo"}, headers=ana)
+    ).json()["id"]
+
+    response = await client.get(f"/chats/{conversation_id}/stream")
+    assert response.status_code == 401
+
+
+async def test_stream_outsider_gets_404(client: AsyncClient):
+    ana, _leo = await two_users()
+    intruder_id = await create_test_user(username="intruso")
+    intruder = make_auth_headers(intruder_id, "intruso")
+    conversation_id = (
+        await client.post("/chats/", json={"username": "leo"}, headers=ana)
+    ).json()["id"]
+
+    response = await client.get(
+        f"/chats/{conversation_id}/stream", headers=intruder
+    )
+    assert response.status_code == 404

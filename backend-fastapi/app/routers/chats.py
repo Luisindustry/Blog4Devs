@@ -1,8 +1,12 @@
+import asyncio
+import json
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import Any
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.dependencies import get_current_user, get_database
@@ -138,6 +142,62 @@ async def list_messages(
 
     return MessageListResponse(
         items=[MessagePublic.model_validate(doc) for doc in docs]
+    )
+
+
+SSE_POLL_SECONDS = 1.5
+
+
+@router.get("/{conversation_id}/stream")
+async def stream_messages(
+    conversation_id: str,
+    request: Request,
+    after_id: str | None = Query(default=None),
+    current_user: UserPublic = Depends(get_current_user),
+    database: AsyncIOMotorDatabase = Depends(get_database),
+) -> StreamingResponse:
+    """Server-Sent Events stream of new messages.
+
+    Uses a short server-side poll (works on single-node Mongo without change
+    streams) but holds a single long-lived connection per client instead of the
+    repeated request churn of client polling.
+    """
+    conversation = await get_conversation_for_user(
+        database, conversation_id, current_user
+    )
+
+    async def event_generator() -> AsyncIterator[str]:
+        last_id: ObjectId | None = (
+            ObjectId(after_id) if after_id and ObjectId.is_valid(after_id) else None
+        )
+        while True:
+            if await request.is_disconnected():
+                break
+
+            query: dict[str, Any] = {"conversation_id": conversation["_id"]}
+            if last_id is not None:
+                query["_id"] = {"$gt": last_id}
+
+            cursor = database.messages.find(query).sort("_id", 1).limit(100)
+            docs = await cursor.to_list(length=100)
+            for doc in docs:
+                last_id = doc["_id"]
+                message = MessagePublic.model_validate(doc)
+                payload = json.dumps(message.model_dump(mode="json"))
+                yield f"id: {message.id}\ndata: {payload}\n\n"
+
+            # Comment line doubles as a heartbeat to surface dropped clients.
+            yield ": keep-alive\n\n"
+            await asyncio.sleep(SSE_POLL_SECONDS)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

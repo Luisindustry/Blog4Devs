@@ -92,3 +92,15 @@ async def test_magic_link_is_single_use(client: AsyncClient):
 async def test_me_requires_auth(client: AsyncClient):
     response = await client.get("/auth/me")
     assert response.status_code == 401
+
+
+async def test_request_link_rate_limited_per_email(client: AsyncClient):
+    payload = {"email": "spam@example.com", "username": "spammer"}
+
+    # Default limit is 3 per email per window.
+    for _ in range(3):
+        ok = await client.post("/auth/request-link", json=payload)
+        assert ok.status_code == 200
+
+    blocked = await client.post("/auth/request-link", json=payload)
+    assert blocked.status_code == 429

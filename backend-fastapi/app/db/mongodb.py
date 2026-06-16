@@ -51,6 +51,21 @@ async def connect_to_mongo(uri: str, database_name: str) -> tuple[AsyncIOMotorCl
         name="ttl_magic_links_expires_at",
     )
 
+    # Rate-limit bookkeeping for magic-link requests; rows self-expire.
+    await database.auth_attempts.create_index(
+        [("created_at", ASCENDING)],
+        expireAfterSeconds=3600,
+        name="ttl_auth_attempts_created_at",
+    )
+    await database.auth_attempts.create_index(
+        [("email", ASCENDING), ("created_at", ASCENDING)],
+        name="idx_auth_attempts_email",
+    )
+    await database.auth_attempts.create_index(
+        [("ip", ASCENDING), ("created_at", ASCENDING)],
+        name="idx_auth_attempts_ip",
+    )
+
     await database.votes.create_index(
         [("question_id", ASCENDING), ("user_id", ASCENDING)],
         unique=True,

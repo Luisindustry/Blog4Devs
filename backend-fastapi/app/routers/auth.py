@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.security import (
     create_session_token,
     generate_magic_token,
@@ -27,15 +27,57 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+async def enforce_rate_limit(
+    request: Request,
+    database: AsyncIOMotorDatabase,
+    email: str,
+    settings: Settings,
+) -> None:
+    """Throttle magic-link requests per email and per IP using a TTL collection."""
+    attempts = database.get_collection("auth_attempts")
+    ip = get_client_ip(request)
+    window_start = utc_now() - timedelta(minutes=settings.rate_limit_window_minutes)
+
+    email_count = await attempts.count_documents(
+        {"email": email, "created_at": {"$gte": window_start}}
+    )
+    if email_count >= settings.rate_limit_max_per_email:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login links requested for this email. Try again later.",
+        )
+
+    ip_count = await attempts.count_documents(
+        {"ip": ip, "created_at": {"$gte": window_start}}
+    )
+    if ip_count >= settings.rate_limit_max_per_ip:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Try again later.",
+        )
+
+    await attempts.insert_one({"email": email, "ip": ip, "created_at": utc_now()})
+
+
 @router.post("/request-link", response_model=MagicLinkResponse)
 async def request_magic_link(
     payload: MagicLinkRequest,
     background_tasks: BackgroundTasks,
+    request: Request,
     database: AsyncIOMotorDatabase = Depends(get_database),
 ) -> MagicLinkResponse:
     settings = get_settings()
     users = database.get_collection("users")
     email = payload.email.lower()
+
+    await enforce_rate_limit(request, database, email, settings)
 
     user = await users.find_one({"email": email})
     is_new_user = user is None
