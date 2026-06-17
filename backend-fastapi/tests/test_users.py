@@ -1,3 +1,5 @@
+import asyncio
+
 from httpx import AsyncClient
 
 from tests.conftest import create_test_user, make_auth_headers
@@ -52,3 +54,23 @@ async def test_change_role_unknown_user_returns_404(client: AsyncClient):
         headers=headers,
     )
     assert response.status_code == 404
+
+
+async def test_role_change_revokes_target_old_token(
+    client: AsyncClient, auth_headers: dict
+):
+    headers = await admin_headers()
+
+    # testuser's token currently works.
+    assert (await client.get("/auth/me", headers=auth_headers)).status_code == 200
+
+    # iat has second granularity; ensure the token predates the cutoff.
+    await asyncio.sleep(1.1)
+
+    promoted = await client.patch(
+        "/users/testuser/role", json={"role": "senior"}, headers=headers
+    )
+    assert promoted.status_code == 200
+
+    # The old token (carrying the previous role) is now revoked.
+    assert (await client.get("/auth/me", headers=auth_headers)).status_code == 401

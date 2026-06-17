@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.core.time import utc_now
 from app.dependencies import ensure_admin, get_current_user, get_database
 from app.models.schemas import RoleUpdate, UserPublic
 
@@ -32,9 +33,11 @@ async def update_user_role(
 ) -> UserPublic:
     ensure_admin(current_user)
 
+    # Bump sessions_valid_after so the user's existing tokens (carrying the old
+    # role) are revoked and they re-login with the new permissions.
     updated = await database.users.find_one_and_update(
         {"username": username.strip().lower()},
-        {"$set": {"role": payload.role.value}},
+        {"$set": {"role": payload.role.value, "sessions_valid_after": utc_now()}},
         return_document=True,
     )
     if updated is None:

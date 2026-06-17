@@ -1,3 +1,5 @@
+from datetime import timezone
+
 from bson import ObjectId
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -31,6 +33,15 @@ async def _resolve_user(
     user = await database.users.find_one({"_id": ObjectId(user_id)})
     if user is None or not user.get("verified", False):
         return None
+
+    # Session revocation: tokens issued before sessions_valid_after are dead
+    # (e.g. after a role change or "log out everywhere").
+    valid_after = user.get("sessions_valid_after")
+    issued_at = payload.get("iat")
+    if valid_after is not None and issued_at is not None:
+        cutoff = int(valid_after.replace(tzinfo=timezone.utc).timestamp())
+        if int(issued_at) < cutoff:
+            return None
 
     return UserPublic.model_validate(user)
 

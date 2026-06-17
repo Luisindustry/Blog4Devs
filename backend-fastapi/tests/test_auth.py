@@ -1,3 +1,4 @@
+import asyncio
 from urllib.parse import parse_qs, urlparse
 
 from httpx import AsyncClient
@@ -6,6 +7,15 @@ from httpx import AsyncClient
 def extract_token(dev_link: str) -> str:
     query = parse_qs(urlparse(dev_link).query)
     return query["token"][0]
+
+
+async def login(client: AsyncClient, email: str, username: str) -> dict:
+    requested = await client.post(
+        "/auth/request-link", json={"email": email, "username": username}
+    )
+    token = extract_token(requested.json()["dev_link"])
+    session = (await client.post("/auth/verify", json={"token": token})).json()
+    return {"Authorization": f"Bearer {session['access_token']}"}
 
 
 async def test_register_requires_username(client: AsyncClient):
@@ -104,3 +114,18 @@ async def test_request_link_rate_limited_per_email(client: AsyncClient):
 
     blocked = await client.post("/auth/request-link", json=payload)
     assert blocked.status_code == 429
+
+
+async def test_logout_all_revokes_existing_tokens(client: AsyncClient):
+    headers = await login(client, "revoke@example.com", "revoker")
+
+    assert (await client.get("/auth/me", headers=headers)).status_code == 200
+
+    # iat has second granularity; ensure the token predates the cutoff.
+    await asyncio.sleep(1.1)
+
+    revoked = await client.post("/auth/logout-all", headers=headers)
+    assert revoked.status_code == 204
+
+    # The same token is now dead everywhere.
+    assert (await client.get("/auth/me", headers=headers)).status_code == 401

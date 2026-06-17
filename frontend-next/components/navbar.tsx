@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { signOut } from "@/app/actions";
+import { signOut, signOutEverywhere } from "@/app/actions";
 import { CarouselLink } from "@/components/carousel-link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
@@ -62,6 +62,15 @@ export async function Navbar() {
                   className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
                 >
                   [salir]
+                </button>
+              </form>
+              <form action={signOutEverywhere}>
+                <button
+                  type="submit"
+                  title="Cierra la sesión en todos tus dispositivos"
+                  className="font-mono text-[10px] text-muted-foreground/50 transition-colors hover:text-foreground"
+                >
+                  [salir de todo]
                 </button>
               </form>
               <ThemeToggle />

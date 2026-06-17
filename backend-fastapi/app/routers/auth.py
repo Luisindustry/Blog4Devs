@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from bson import ObjectId
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -167,3 +168,15 @@ async def verify_magic_link(
 @router.get("/me", response_model=UserPublic)
 async def get_me(current_user: UserPublic = Depends(get_current_user)) -> UserPublic:
     return current_user
+
+
+@router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_everywhere(
+    current_user: UserPublic = Depends(get_current_user),
+    database: AsyncIOMotorDatabase = Depends(get_database),
+) -> None:
+    # Invalidates every existing session token for this user.
+    await database.users.update_one(
+        {"_id": ObjectId(current_user.id)},
+        {"$set": {"sessions_valid_after": utc_now()}},
+    )

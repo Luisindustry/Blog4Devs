@@ -68,6 +68,21 @@ export async function signOut() {
   redirect("/");
 }
 
+export async function signOutEverywhere() {
+  // Revokes every session token server-side, then clears this device's cookie.
+  try {
+    await fetchBackend("/auth/logout-all", {
+      method: "POST",
+      headers: await authHeaders(),
+    });
+  } catch {
+    // Clear the local cookie regardless of the backend result.
+  }
+  const store = await cookies();
+  store.delete(SESSION_COOKIE);
+  redirect("/");
+}
+
 export async function createQuestion(data: QuestionFormData) {
   const res = await fetchBackend("/questions/", {
     method: "POST",
