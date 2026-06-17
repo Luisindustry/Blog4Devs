@@ -58,7 +58,7 @@ npm run dev
 
 | Variable | Default | Descripción |
 |---|---|---|
-| `APP_NAME` | `Junior Senior QA API` | Nombre mostrado en /docs |
+| `APP_NAME` | `blog4devs API` | Nombre mostrado en /docs |
 | `ENVIRONMENT` | `local` | `local` / `production` |
 | `MONGODB_URI` | `mongodb://localhost:27017` | Cadena de conexión MongoDB |
 | `MONGODB_DATABASE` | `community_qa` | Nombre de la base de datos |

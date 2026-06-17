@@ -7,7 +7,7 @@ _DEV_AUTH_SECRET = "dev-secret-change-me-in-production"
 
 
 class Settings(BaseSettings):
-    app_name: str = "Junior Senior QA API"
+    app_name: str = "blog4devs API"
     environment: str = "local"
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_database: str = "community_qa"

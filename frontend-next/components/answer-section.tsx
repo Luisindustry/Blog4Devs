@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { acceptAnswer, createAnswer } from "@/app/actions";
 import { Markdown } from "@/components/markdown";
 import { formatDate } from "@/lib/date";
+import { ANSWER_CONTENT_MIN } from "@/lib/validation";
 import type { Answer } from "@/types/api";
 
 type AnswerSectionProps = {
@@ -111,8 +112,10 @@ export function AnswerSection({
     if (!currentUsername) return;
 
     const trimmed = content.trim();
-    if (trimmed.length < 20) {
-      toast.error("La respuesta debe tener al menos 20 caracteres");
+    if (trimmed.length < ANSWER_CONTENT_MIN) {
+      toast.error(
+        `La respuesta debe tener al menos ${ANSWER_CONTENT_MIN} caracteres`,
+      );
       textareaRef.current?.focus();
       return;
     }

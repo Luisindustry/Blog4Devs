@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import {
+  QUESTION_CONTENT_MIN as CONTENT_MIN,
+  QUESTION_TAGS_MAX as TAGS_MAX,
+  QUESTION_TITLE_MIN as TITLE_MIN,
+} from "@/lib/validation";
 import type { QuestionFormData } from "@/app/actions";
 import type { QuestionSummary } from "@/types/api";
-
-// Keep in sync with backend validation (app/models/schemas.py)
-const TITLE_MIN = 10;
-const CONTENT_MIN = 30;
-const TAGS_MAX = 8;
 
 type QuestionSheetProps = {
   open: boolean;
