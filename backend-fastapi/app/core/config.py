@@ -1,15 +1,25 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEV_AUTH_SECRET = "dev-secret-change-me-in-production"
 
 
 class Settings(BaseSettings):
-    app_name: str = "Junior Senior QA API"
+    app_name: str = "blog4devs API"
     environment: str = "local"
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_database: str = "community_qa"
     frontend_origin: str = "http://localhost:3000"
+    auth_secret_key: str = _DEV_AUTH_SECRET
+    magic_link_ttl_minutes: int = Field(default=15, ge=5, le=60)
+    session_ttl_days: int = Field(default=30, ge=1, le=365)
+    rate_limit_window_minutes: int = Field(default=15, ge=1, le=120)
+    rate_limit_max_per_email: int = Field(default=3, ge=1, le=100)
+    rate_limit_max_per_ip: int = Field(default=15, ge=1, le=1000)
+    resend_api_key: str | None = None
+    email_from: str = "blog4devs <onboarding@resend.dev>"
     n8n_question_created_webhook_url: str | None = None
     n8n_webhook_timeout_seconds: float = Field(default=5.0, ge=1.0, le=30.0)
 
@@ -18,6 +28,14 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def reject_default_secret_in_production(self) -> "Settings":
+        if self.environment == "production" and self.auth_secret_key == _DEV_AUTH_SECRET:
+            raise ValueError(
+                "AUTH_SECRET_KEY must be set to a strong random value when ENVIRONMENT=production"
+            )
+        return self
 
 
 @lru_cache

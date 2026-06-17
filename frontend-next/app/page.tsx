@@ -1,13 +1,38 @@
-import { QuestionCard } from "@/components/question-card";
-import type { QuestionListResponse, QuestionSummary } from "@/types/api";
-import { formatRelativeTime } from "@/lib/date";
+import Link from "next/link";
+import { QuestionFeed } from "@/components/question-feed";
+import { fetchBackend, publicCache } from "@/lib/backend";
+import { getSession, type SessionUser } from "@/lib/session";
+import type { QuestionListResponse, QuestionStatus, QuestionSummary } from "@/types/api";
 
-const apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
+// Public feed revalidates on the server (ISR in prod); the moderation queue
+// stays fresh. Mutations call revalidatePath("/") to bust the cache.
+const PUBLIC_FEED_REVALIDATE_SECONDS = 60;
 
-async function fetchRecentQuestions(): Promise<QuestionSummary[]> {
+type PageProps = {
+  searchParams: Promise<{ tag?: string }>;
+};
+
+function isModerator(session: SessionUser | null): boolean {
+  return session?.role === "admin" || session?.role === "senior";
+}
+
+async function fetchRecentQuestions(
+  tag?: string,
+  status?: QuestionStatus,
+): Promise<QuestionSummary[]> {
   try {
-    const res = await fetch(`${apiBaseUrl}/questions/?limit=20`, {
-      cache: "no-store",
+    const params = new URLSearchParams({ limit: "20" });
+    if (tag) params.set("tag", tag);
+    if (status) params.set("status", status);
+
+    // Pending queue must be fresh; the approved public feed can be cached.
+    const cacheOptions: RequestInit =
+      status === "pending"
+        ? { cache: "no-store" }
+        : publicCache(PUBLIC_FEED_REVALIDATE_SECONDS);
+
+    const res = await fetchBackend(`/questions/?${params.toString()}`, {
+      ...cacheOptions,
       headers: { Accept: "application/json" },
     });
     if (!res.ok) return [];
@@ -18,8 +43,15 @@ async function fetchRecentQuestions(): Promise<QuestionSummary[]> {
   }
 }
 
-export default async function HomePage() {
-  const questions = await fetchRecentQuestions();
+export default async function HomePage({ searchParams }: PageProps) {
+  const { tag } = await searchParams;
+  const session = await getSession();
+  const moderator = isModerator(session);
+
+  const [questions, pendingQuestions] = await Promise.all([
+    fetchRecentQuestions(tag),
+    moderator ? fetchRecentQuestions(tag, "pending") : Promise.resolve([]),
+  ]);
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-20 pt-28">
@@ -34,38 +66,33 @@ export default async function HomePage() {
           Respuestas de desarrolladores senior.
         </h1>
         <p className="mt-3 max-w-md text-sm text-muted-foreground">
-          Una plataforma donde juniors preguntan sin miedo y seniors comparten experiencia real —
-          sin Stack Overflow genérico.
+          Una plataforma donde juniors preguntan sin miedo y seniors comparten
+          experiencia real — sin Stack Overflow genérico.
         </p>
       </section>
 
       {/* Feed */}
       <section className="mt-8">
-        <h2 className="mb-4 font-mono text-[11px] uppercase tracking-widest text-muted-foreground/60">
-          Preguntas Recientes
-        </h2>
-
-        {questions.length === 0 ? (
-          <p className="py-12 text-center font-mono text-sm text-muted-foreground">
-            No hay preguntas todavía. ¡Sé el primero en preguntar.
-          </p>
-        ) : (
-          <div>
-            {questions.map((q) => (
-              <QuestionCard
-                key={q.id}
-                id={q.id}
-                slug={q.slug}
-                title={q.title}
-                tags={q.tags}
-                author={q.author.username}
-                votes={q.votes}
-                answersCount={q.answers_count}
-                createdAt={formatRelativeTime(q.created_at)}
-              />
-            ))}
-          </div>
-        )}
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/60">
+            {tag ? `Preguntas con [${tag}]` : "Preguntas Recientes"}
+          </h2>
+          {tag && (
+            <Link
+              href="/"
+              className="font-mono text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              [quitar filtro ×]
+            </Link>
+          )}
+        </div>
+        <QuestionFeed
+          initialQuestions={questions}
+          pendingQuestions={pendingQuestions}
+          currentUsername={session?.username ?? null}
+          isModerator={moderator}
+          isAdmin={session?.role === "admin"}
+        />
       </section>
     </main>
   );

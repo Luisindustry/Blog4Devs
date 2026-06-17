@@ -1,7 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { seedQuestion } from "./helpers";
+import { authenticateBrowser, seedQuestion } from "./helpers";
 
 test.describe("Botón de Upvote", () => {
+  // Voting now persists and requires a session.
+  test.beforeEach(async ({ context }) => {
+    await authenticateBrowser(context);
+  });
+
   test("incrementa el contador al hacer click", async ({ page }) => {
     const q = await seedQuestion({
       title: "E2E upvote: click en upvote incrementa el contador de votos",

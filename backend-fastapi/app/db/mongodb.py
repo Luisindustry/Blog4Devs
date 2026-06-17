@@ -1,8 +1,11 @@
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from pymongo import ASCENDING
+
+from app.db.migrate import ensure_schema
 
 
-async def connect_to_mongo(uri: str, database_name: str) -> tuple[AsyncIOMotorClient, AsyncIOMotorDatabase]:
+async def connect_to_mongo(
+    uri: str, database_name: str
+) -> tuple[AsyncIOMotorClient, AsyncIOMotorDatabase]:
     client: AsyncIOMotorClient = AsyncIOMotorClient(
         uri,
         serverSelectionTimeoutMS=5000,
@@ -11,14 +14,6 @@ async def connect_to_mongo(uri: str, database_name: str) -> tuple[AsyncIOMotorCl
     await client.admin.command("ping")
 
     database: AsyncIOMotorDatabase = client[database_name]
-    await database.questions.create_index(
-        [("slug", ASCENDING)],
-        unique=True,
-        name="uq_questions_slug",
-    )
-    await database.questions.create_index(
-        [("status", ASCENDING), ("created_at", ASCENDING)],
-        name="idx_questions_status_created_at",
-    )
+    await ensure_schema(database)
 
     return client, database

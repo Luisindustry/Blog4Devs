@@ -1,3 +1,9 @@
+export function formatDate(value: string): string {
+  return new Intl.DateTimeFormat("es-MX", { dateStyle: "long" }).format(
+    new Date(value),
+  );
+}
+
 export function formatRelativeTime(isoString: string): string {
   const diffMs = Date.now() - new Date(isoString).getTime();
   const minutes = Math.floor(diffMs / 60_000);

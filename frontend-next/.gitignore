@@ -5,3 +5,8 @@
 node_modules/
 out/
 dist/
+*.tsbuildinfo
+
+# Playwright
+/playwright-report/
+/test-results/

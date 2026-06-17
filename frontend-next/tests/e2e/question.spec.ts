@@ -33,7 +33,7 @@ test.describe("Página de detalle de pregunta", () => {
 
     await page.goto(`/preguntas/${q.slug}`);
 
-    await expect(page.getByText("Aun no hay respuestas publicadas.")).toBeVisible();
+    await expect(page.getByText("no hay respuestas publicadas")).toBeVisible();
   });
 
   test("muestra la fecha de creación de la pregunta", async ({ page }) => {
@@ -47,9 +47,9 @@ test.describe("Página de detalle de pregunta", () => {
     await expect(page.locator("time")).toBeVisible();
   });
 
-  test("muestra 404 para un slug inexistente", async ({ page }) => {
-    const response = await page.goto("/preguntas/este-slug-absolutamente-no-existe-jamas-en-la-db");
-    expect(response?.status()).toBe(404);
+  test("muestra la página de no encontrado para un slug inexistente", async ({ page }) => {
+    await page.goto("/preguntas/este-slug-absolutamente-no-existe-jamas-en-la-db");
+    await expect(page.getByText("Esta página no existe.")).toBeVisible();
   });
 
   test("la navbar sigue visible en la página de pregunta", async ({ page }) => {

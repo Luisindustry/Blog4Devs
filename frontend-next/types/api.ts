@@ -49,12 +49,31 @@ export type QuestionListResponse = {
 
 export type AnswerCreate = {
   content: string;
-  author: Author;
 };
 
 export type QuestionCreate = {
   title: string;
   content: string;
-  author: Author;
   tags: string[];
+};
+
+export type ChatParticipant = {
+  user_id: string;
+  username: string;
+};
+
+export type Conversation = {
+  id: string;
+  participants: ChatParticipant[];
+  last_message_at: string | null;
+  last_message_preview: string | null;
+  created_at: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  conversation_id: string;
+  sender: ChatParticipant;
+  content: string;
+  created_at: string;
 };
