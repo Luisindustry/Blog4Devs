@@ -102,3 +102,33 @@ Cada push a `main` y cada PR ejecuta:
 
 - **Backend:** `ruff check` + `pytest` con MongoDB de servicio
 - **Frontend:** `tsc --noEmit` + `next lint`
+
+## Mejoras futuras (backlog)
+
+Decisiones diferidas a propósito, con su justificación:
+
+### Respuestas en una colección separada (cuando crezca)
+
+Hoy las respuestas van **embebidas** en el documento de la pregunta
+(`questions.answers[]`), con `answers_count` denormalizado para los listados.
+Es lo correcto para la escala actual: las lecturas traen pregunta + respuestas
+en una sola consulta y la mayoría de preguntas tienen pocas respuestas.
+
+**Cuándo migrar a una colección `answers` aparte:** cuando una pregunta empiece
+a acumular **cientos** de respuestas (un documento Mongo no puede superar 16 MB,
+y cada `$push` reescribe todo el array).
+
+**Esbozo de la migración:**
+1. Crear colección `answers` con índice `{ question_id, created_at }`.
+2. Script de migración: mover cada `answers[]` embebido a documentos sueltos.
+3. Endpoint paginado `GET /questions/{slug}/answers`.
+4. Ajustar `add_answer`, `accept_answer` y el cálculo de `answers_count`.
+5. El frontend del detalle carga las respuestas por separado (paginadas).
+
+### Otras decisiones (mantenidas a propósito)
+
+- **`get_current_user` consulta Mongo por request:** se mantiene (no se confía
+  solo en los claims del JWT) para que los cambios de rol y la **revocación de
+  sesiones** surtan efecto al instante. La consulta es por `_id` (barata).
+- **`count_documents` en los listados:** se mantiene; no hay UI de paginación
+  que justifique pasar a paginación por cursor todavía.
